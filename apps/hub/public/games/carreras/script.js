@@ -193,6 +193,11 @@ window.addEventListener('keydown', e => {
         e.preventDefault();
     }
     if (k === 'enter') {
+        // BUG-025: la partida NO se arranca localmente. Si el SDK está presente,
+        // el único que decide cuándo empezar es el servidor (onMatchLive). Antes
+        // esto iniciaba una carrera propia: el reloj corría y el HUD se pintaba,
+        // pero no había partida en el servidor y el coche no se movía.
+        if (window.PlayWin && !window.PlayWin.canStartLocally()) return;
         if (gameState === STATE_TITLE || gameState === STATE_GAMEOVER) {
             startRace();
         }

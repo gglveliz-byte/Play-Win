@@ -1417,17 +1417,23 @@
     canvas.addEventListener('touchstart', handleFlapInput, { passive: false });
     canvas.addEventListener('mousedown', handleFlapInput);
 
+    // BUG-025: con el SDK presente la partida la arranca SOLO el servidor
+    // (onMatchLive). Estos botones son de cuando el juego era de un jugador:
+    // pulsarlos antes de encolar arranca una partida fantasma sin rival.
+    const puedeArrancarLocal = () =>
+        !window.PlayWin || (typeof window.PlayWin.canStartLocally === 'function' && window.PlayWin.canStartLocally());
+
     if (btnStart) {
         btnStart.addEventListener('click', (e) => {
             e.stopPropagation();
-            startGame();
+            if (puedeArrancarLocal()) startGame();
         });
     }
 
     if (btnRestart) {
         btnRestart.addEventListener('click', (e) => {
             e.stopPropagation();
-            startGame();
+            if (puedeArrancarLocal()) startGame();
         });
     }
 

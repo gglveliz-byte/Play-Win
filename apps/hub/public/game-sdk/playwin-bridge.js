@@ -1,19 +1,24 @@
-/**
- * PLAY WIN GAME BRIDGE SDK — CLIENT ADAPTER (playwin-bridge.js)
- * Protocolo Universal de Integración de Videojuegos 1v1 (< 350 líneas)
- * Cumple AGENTS.md, playwin-realtime-duels y playwin-game-bridge.
- */
+// PLAY WIN GAME BRIDGE SDK — CLIENT ADAPTER (playwin-bridge.js)
+// Protocolo Universal de Integración de Videojuegos 1v1 (< 350 líneas)
+// Cumple AGENTS.md, playwin-realtime-duels y playwin-game-bridge.
 (function () {
   'use strict';
   let WS_URL = window.PLAYWIN_WS_URL || 'ws://localhost:3001/ws';
   const isInIframe = window.parent && window.parent !== window;
 
-  let socket = null, currentGameId = 'flapy-flapy', matchCallbacks = {};
+  let currentGameId = 'flapy-flapy', matchCallbacks = {};
   let currentSeed = null, currentRoomId = null, opponentData = null;
   let targetOppState = { x: 0, y: 0, score: 0, isAlive: true };
   let opponentState = { x: 0, y: 0, score: 0, isAlive: true };
   let localScore = 0, isMatchLive = false, isHandshakeComplete = false;
   let pingTimer = null, afkTimer = null;
+  // Gestor de conexión (ver BUG-022). Su ciclo de vida vive en
+  // playwin-bridge-connection.js; aquí solo se guarda la instancia.
+  let connection = null;
+  // Estado de indisponibilidad, para que la UI no oculte el problema.
+  let isOffline = false;
+  // Reloj del aviso de espera prolongada (BUG-024).
+  let waitingTimer = null;
 
   // Interpolación suave (Lerp 60Hz) para evitar saltos del rival en cualquier juego
   function updateLerp() {
@@ -66,46 +71,65 @@
       applyPlayerSession(p);
       isHandshakeComplete = true;
       if (p.token) {
-        if (!socket || socket.readyState !== WebSocket.OPEN) connectWebSocket();
+        if (!isSocketOpen()) connectWebSocket();
       } else { showScreen('pw-screen-auth'); }
     } else if (event.data.type === 'PLAYWIN_REQUIRE_LOGIN') {
       showScreen('pw-screen-auth');
     }
   });
 
-  const showReconnectBanner = (t) => { const el = document.getElementById('pw-reconnect-banner'); if (el) { el.textContent = t; el.classList.add('active'); } };
-  const hideReconnectBanner = () => { const el = document.getElementById('pw-reconnect-banner'); if (el) el.classList.remove('active'); };
+  const STATUS = window.PLAYWIN_STATUS || {};
+  const SCREEN_OFFLINE = 'pw-screen-offline';
+  const DETAIL_OFFLINE = 'pw-offline-detail';
+  const BANNER_ID = 'pw-reconnect-banner';
+
+  const showReconnectBanner = (t) => STATUS.showBanner && STATUS.showBanner(BANNER_ID, t);
+  const hideReconnectBanner = () => STATUS.deactivate && STATUS.deactivate(BANNER_ID);
+
+  // Muestra la pantalla de servicio no disponible. Un fallo de conexión ANTES de
+  // empezar la partida ya no es mudo (BUG-022): el jugador debe saber que el
+  // servidor de duelos no responde, en lugar de mirar el radar indefinidamente.
+  function showOfflineScreen(motivo) {
+    isOffline = true;
+    if (STATUS.showOffline) STATUS.showOffline(SCREEN_OFFLINE, DETAIL_OFFLINE, motivo);
+  }
+
+  // Limpia el estado de indisponibilidad al recuperar la conexión.
+  function clearOffline() {
+    isOffline = false;
+    if (STATUS.hideOffline) STATUS.hideOffline(DETAIL_OFFLINE);
+    hideReconnectBanner();
+  }
+
+  // Reintento manual desde el botón REINTENTAR.
+  function retryConnection() {
+    if (!connection) return;
+    connection.retry();
+    isOffline = false;
+  }
 
   function injectInterface() {
     if (document.getElementById('playwin-ui-layer')) return;
-    // Hoja de estilos del SDK (una sola vez)
-    if (!document.getElementById('playwin-bridge-css')) {
-      const link = document.createElement('link');
-      link.id = 'playwin-bridge-css'; link.rel = 'stylesheet';
-      link.href = window.PLAYWIN_SDK_CSS_URL || '/game-sdk/playwin-bridge.css';
-      document.head.appendChild(link);
-    }
-    const container = document.createElement('div');
-    container.id = 'playwin-ui-layer';
-    // Markup de las 5 pantallas estándar. Se comprime con concatenación para
-    // respetar el límite de 350 líneas de playwin-code-governance.
-    // El markup de las 5 pantallas vive en playwin-bridge-ui.js para que este
-    // archivo contenga solo lógica. Debe cargarse ANTES que este script.
-    if (typeof window.PLAYWIN_UI_MARKUP !== 'function') {
+    // El markup y la inyección del DOM viven en playwin-bridge-ui.js para que
+    // este archivo contenga sólo lógica. Ese script debe cargarse ANTES.
+    if (!window.PLAYWIN_UI || typeof window.PLAYWIN_UI.inject !== 'function') {
       console.error('[PlayWin SDK] Falta /game-sdk/playwin-bridge-ui.js: cárgalo ANTES que playwin-bridge.js');
       return;
     }
-    container.innerHTML = window.PLAYWIN_UI_MARKUP(currentPlayer);
-    document.body.appendChild(container);
+    window.PLAYWIN_UI.inject(currentPlayer);
 
     const bindClick = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
+    const closeArena = () => isInIframe ? window.parent.postMessage({ type: 'PLAYWIN_CLOSE_ARENA' }, '*') : window.location.href = '/';
     bindClick('pw-btn-auth-login', () => isInIframe ? window.parent.postMessage({ type: 'PLAYWIN_REQUEST_LOGIN' }, '*') : window.location.href = '/');
-    bindClick('pw-btn-auth-back', () => isInIframe ? window.parent.postMessage({ type: 'PLAYWIN_CLOSE_ARENA' }, '*') : window.location.href = '/');
+    bindClick('pw-btn-auth-back', closeArena);
+    bindClick('pw-btn-offline-back', closeArena);
+    bindClick('pw-btn-lobby', () => isInIframe ? window.parent.postMessage({ type: 'PLAYWIN_CLOSE_ARENA' }, '*') : location.reload());
+    bindClick('pw-btn-cancel-mm', closeArena);
+    bindClick('pw-btn-retry', retryConnection);
     bindClick('pw-btn-surrender', () => window.PlayWin.notifyCrash());
     bindClick('pw-btn-rematch', () => window.PlayWin.startMatchmaking());
-    bindClick('pw-btn-lobby', () => isInIframe ? window.parent.postMessage({ type: 'PLAYWIN_CLOSE_ARENA' }, '*') : location.reload());
-    bindClick('pw-btn-cancel-mm', () => isInIframe ? window.parent.postMessage({ type: 'PLAYWIN_CLOSE_ARENA' }, '*') : document.getElementById('pw-screen-mm')?.classList.remove('active'));
 
+    // Sin pausas locales: se anulan Escape y P durante la partida.
     window.addEventListener('keydown', (e) => {
       if (isMatchLive && (e.key === 'Escape' || e.key === 'p' || e.key === 'P')) {
         e.preventDefault(); e.stopPropagation();
@@ -116,43 +140,70 @@
   function startPing() {
     if (pingTimer) clearInterval(pingTimer);
     pingTimer = setInterval(() => {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: 'PING', clientTime: Date.now() }));
+      if (connection && connection.isOpen()) {
+        connection.getSocket().send(JSON.stringify({ action: 'PING', clientTime: Date.now() }));
       }
     }, 2000);
   }
 
+  // ¿Hay conexión abierta con el servidor de duelos?
+  // ¿Hay conexión abierta con el servidor de duelos?
+  function isSocketOpen() { return !!connection && connection.isOpen(); }
+
+  // Envía un mensaje si la conexión está abierta.
+  function sendIfOpen(payload) {
+    if (isSocketOpen()) connection.getSocket().send(JSON.stringify(payload));
+  }
+
+  // Conecta con el servidor de duelos. El ciclo de vida del socket (timeout,
+  // caídas, reintento y aviso) vive en playwin-bridge-connection.js.
   function connectWebSocket() {
-    if (!currentPlayer || !currentPlayer.token) {
-      showScreen('pw-screen-auth');
+    if (!currentPlayer || !currentPlayer.token) { showScreen('pw-screen-auth'); return; }
+    if (!window.PLAYWIN_CONNECTION) {
+      console.error('[PlayWin SDK] Falta /game-sdk/playwin-bridge-connection.js: cárgalo ANTES que playwin-bridge.js');
+      showOfflineScreen('Falta un componente del SDK en la página.');
       return;
     }
-    if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
-    socket = new WebSocket(WS_URL);
-    socket.onopen = () => {
-      hideReconnectBanner();
-      startPing();
-      socket.send(JSON.stringify({ action: 'JOIN_MATCH', player: { ...currentPlayer, gameId: currentGameId } }));
-    };
-    socket.onclose = () => {
-      if (isMatchLive) {
-        showReconnectBanner('⚠️ Conexión perdida. Reconectando...');
-        setTimeout(() => {
-          if (isMatchLive && (!socket || socket.readyState === WebSocket.CLOSED)) connectWebSocket();
-        }, 1000);
+    if (!connection) {
+      connection = window.PLAYWIN_CONNECTION.createConnectionManager({
+        wsUrl: () => WS_URL,
+        joinPayload: () => ({ action: 'JOIN_MATCH', player: { ...currentPlayer, gameId: currentGameId } }),
+        isMatchLive: () => isMatchLive,
+        onOffline: (motivo) => { isOffline = true; showOfflineScreen(motivo); },
+        onOnline: (recuperado) => { isOffline = false; if (recuperado) clearOffline(); startPing(); },
+        onBanner: (texto) => showReconnectBanner(texto),
+      });
+      connection.setOnMessage(handleServerMessage);
+    }
+    connection.connect();
+  }
+
+  // Muestra el radar y, si nadie aparece, explica POR QUÉ (BUG-024). Con los
+  // rivales de entrenamiento desactivados, un jugador solo espera indefinidamente
+  // sin saber que no va a llegar nadie. A los 15 s se le dice la verdad.
+  function startWaitingNotice() {
+    showScreen('pw-screen-mm');
+    const desc = document.querySelector('#pw-screen-mm .pw-subtitle');
+    if (desc) desc.textContent = 'Emparejando rival en tu división competitiva...';
+    if (waitingTimer) clearTimeout(waitingTimer);
+    waitingTimer = setTimeout(() => {
+      const el = document.querySelector('#pw-screen-mm .pw-subtitle');
+      if (el && !isMatchLive) {
+        el.textContent = 'Seguimos buscando rival humano. Los rivales de entrenamiento están desactivados, así que la espera puede alargarse: entra con otra cuenta o avisa a alguien para duelar.';
       }
-    };
-    socket.onerror = () => {
-      if (isMatchLive) showReconnectBanner('⚠️ Error de red. Reintentando...');
-    };
-    socket.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
+    }, 15000);
+  }
+
+  // Procesa los eventos que llegan del servidor de duelos.
+  function handleServerMessage(event) {
+    const msg = JSON.parse(event.data);
+    {
       if (msg.event === 'SECURITY_ERROR') {
         showScreen('pw-screen-auth');
         const desc = document.querySelector('#pw-screen-auth .pw-subtitle');
         if (desc) desc.textContent = msg.message;
       }
-      else if (msg.event === 'MATCH_WAITING') showScreen('pw-screen-mm');
+      else if (msg.event === 'MATCH_WAITING') startWaitingNotice();
       else if (msg.event === 'MATCH_START') handleMatchStart(msg);
       else if (msg.event === 'MATCH_LIVE') handleMatchLive();
       else if (msg.event === 'RIVAL_TICK') {
@@ -169,7 +220,7 @@
       } else if (msg.event === 'MATCH_RESUME') {
         handleMatchResume(msg);
       } else if (msg.event === 'MATCH_END') handleMatchEnd(msg);
-    };
+    }
   }
 
   function handleMatchResume(msg) {
@@ -214,6 +265,7 @@
   }
 
   function handleMatchStart(msg) {
+    stopWaitingNotice();
     currentRoomId = msg.roomId; currentSeed = msg.seed; opponentData = msg.opponent;
     document.getElementById('pw-opp-avatar').textContent = opponentData.avatar || '🎯';
     document.getElementById('pw-opp-name').textContent = opponentData.username;
@@ -305,30 +357,40 @@
       }
     },
     startMatchmaking: function () {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: 'JOIN_MATCH', player: { ...currentPlayer, gameId: currentGameId } }));
+      if (isSocketOpen()) {
+        sendIfOpen({ action: 'JOIN_MATCH', player: { ...currentPlayer, gameId: currentGameId } });
       } else {
         connectWebSocket();
       }
     },
     sendTick: function (state = {}) {
-      if (!isMatchLive || !socket || socket.readyState !== WebSocket.OPEN) return;
+      if (!isMatchLive || !isSocketOpen()) return;
       localScore = state.score !== undefined ? state.score : localScore;
       const myScoreEl = document.getElementById('pw-hud-my-score');
       if (myScoreEl) myScoreEl.textContent = localScore;
-      socket.send(JSON.stringify({ action: 'PLAYER_TICK', x: Number(state.x) || 0, y: Number(state.y) || 0, score: Number(localScore) || 0, isAlive: state.isAlive ?? true }));
+      sendIfOpen({ action: 'PLAYER_TICK', x: Number(state.x) || 0, y: Number(state.y) || 0, score: Number(localScore) || 0, isAlive: state.isAlive ?? true });
     },
     notifyCrash: function () {
-      if (!isMatchLive || !socket || socket.readyState !== WebSocket.OPEN) return;
-      socket.send(JSON.stringify({ action: 'PLAYER_CRASHED' }));
+      if (!isMatchLive) return;
+      sendIfOpen({ action: 'PLAYER_CRASHED' });
     },
     notifyFinish: function (score) {
-      if (!isMatchLive || !socket || socket.readyState !== WebSocket.OPEN) return;
-      socket.send(JSON.stringify({ action: 'PLAYER_FINISH', score: score !== undefined ? Number(score) : Number(localScore) }));
+      if (!isMatchLive) return;
+      sendIfOpen({ action: 'PLAYER_FINISH', score: score !== undefined ? Number(score) : Number(localScore) });
     },
     getOpponentState: function () { return { ...opponentState }; },
     getPlayer: function () { return { ...currentPlayer }; },
-    isLive: function () { return isMatchLive; }
+    isLive: function () { return isMatchLive; },
+    isOffline: function () { return isOffline; },
+    // Guardián del ciclo de partida (BUG-025).
+    // Los 4 juegos conservan botones y teclas de arranque local de cuando eran
+    // de un solo jugador. Si se pulsan, el juego arranca una carrera propia: el
+    // reloj corre, el HUD se pinta… pero NO hay partida en el servidor y el
+    // coche no se mueve, porque sólo se envían ticks si `isLive()` es true.
+    // Los juegos deben consultar esto antes de arrancar por su cuenta:
+    // if (window.PlayWin && !window.PlayWin.canStartLocally()) return;
+    // @returns {boolean} true SÓLO si no hay SDK cargado (modo práctica suelto).
+    canStartLocally: function () { return false; }
   };
   Object.freeze(window.PlayWin);
 })();

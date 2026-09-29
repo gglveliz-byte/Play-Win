@@ -1061,14 +1061,21 @@
 
     GameManager.prototype.initUI = function () {
         var self = this;
+        // BUG-025: con el SDK presente, la partida la arranca SOLO el servidor
+        // (onMatchLive). Estos botones son de cuando el juego era de un jugador:
+        // si se pulsan antes de encolar, arrancan una partida fantasma en la que
+        // el reloj corre pero el marcador nunca se envía al servidor.
+        var puedeArrancarLocal = function () {
+            return !window.PlayWin || (typeof window.PlayWin.canStartLocally === 'function' && window.PlayWin.canStartLocally());
+        };
         var btnStart = document.getElementById('btn_start');
-        if (btnStart) btnStart.onclick = function () { self.startGame(); };
+        if (btnStart) btnStart.onclick = function () { if (puedeArrancarLocal()) self.startGame(); };
 
         var btnRestart = document.getElementById('btn_restart');
-        if (btnRestart) btnRestart.onclick = function () { self.startGame(); };
+        if (btnRestart) btnRestart.onclick = function () { if (puedeArrancarLocal()) self.startGame(); };
 
         var btnRestartPause = document.getElementById('btn_restart_pause');
-        if (btnRestartPause) btnRestartPause.onclick = function () { self.startGame(); };
+        if (btnRestartPause) btnRestartPause.onclick = function () { if (puedeArrancarLocal()) self.startGame(); };
 
         var btnMenu = document.getElementById('btn_menu');
         if (btnMenu) btnMenu.onclick = function () { self.showTitleScreen(); };

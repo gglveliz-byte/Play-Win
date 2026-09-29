@@ -585,6 +585,83 @@ if (k === 'enter') {
 
 ---
 
+### ✅ Hito C.3: El juego respeta al árbitro y nunca falla en silencio · `VERIFICADO`
+
+**Fecha:** 2026-09-29 · **Bugs cerrados:** BUG-025 (crítico) · BUG-022 · BUG-024
+
+* **Objetivo:** cerrar los 3 bugs de la misma familia —el juego no respetaba el ciclo
+  del árbitro ni comunicaba lo que ocurría— en un solo micro-hito.
+
+#### 1. BUG-025 · Guardián del ciclo de partida
+
+* Nuevo `PlayWin.canStartLocally()` en el SDK: devuelve **siempre `false`** cuando el
+  SDK está cargado, así que el único que decide cuándo arrancar es `onMatchLive`.
+* **6 disparadores locales blindados** en 3 motores:
+
+| Motor | Disparadores corregidos |
+| :--- | :--- |
+| `carreras/script.js` | tecla `Enter` |
+| `space/script.js` | `#btn_start`, `#btn_restart`, `#btn_restart_pause` |
+| `flapy-flapy/script.js` | botones de inicio y reinicio (helper DRY `puedeArrancarLocal()`) |
+| `sky/js/game.js` | *(ya era correcto: sólo arrancaba en `onMatchLive`)* |
+
+* **Micro-ediciones quirúrgicas**: un `if` por disparador. Los motores siguen
+  congelados contra el engorde, como exige la gobernanza.
+
+#### 2. BUG-022 · El SDK ya no falla en silencio
+
+Nuevo módulo `playwin-bridge-connection.js`:
+
+* El fallo de conexión se avisa **siempre**, no solo durante la partida.
+* **Timeout de 10 s**: un socket atascado ya no queda en silencio.
+* Pantalla elegante nueva **`#pw-screen-offline`**: *"Duelos fuera de línea /
+  Los juegos en línea no están disponibles en este momento"*, con el detalle
+  técnico (URL intentada) y botón **REINTENTAR CONEXIÓN**.
+
+#### 3. BUG-024 · Espera honesta
+
+Tras 15 s en el radar sin rival, el texto cambia a:
+
+> *"Seguimos buscando rival humano. Los rivales de entrenamiento están
+> desactivados, así que la espera puede alargarse: entra con otra cuenta o avisa
+> a alguien para duelar."*
+
+#### Modularización del SDK
+
+La Regla 1 de gobernanza asigna **800 líneas** a SDK/orquestadores, pero se dividió
+igualmente para que cada módulo tenga una responsabilidad clara:
+
+`playwin-bridge.js` (~396L, protocolo) · `playwin-bridge-ui.js` (124L, markup e
+inyección) · `playwin-bridge-connection.js` (111L, WebSocket) ·
+`playwin-bridge-status.js` (67L, avisos) · `playwin-bridge.css` (349L).
+
+Los 4 juegos cargan ahora los 4 scripts en orden obligatorio.
+
+#### Corrección de la propia suite de gobernanza
+
+La comprobación de tamaño aplicaba **350 líneas al Bridge SDK**, cuando la Regla 1
+le asigna **800** por ser orquestador explícito. **Se corrigió la prueba, no el
+código**, con una lista explícita de orquestadores (nada de exclusiones amplias).
+
+#### Verificación ejecutada
+
+| Prueba | Resultado |
+| :--- | :--- |
+| `npm run test:governance` | ✅ **12/12** |
+| Prueba nueva: *"Los juegos no arrancan partidas locales saltándose al árbitro"* | ✅ Pasa |
+| **La misma prueba EN NEGATIVO** (quitando el guardián de carreras) | ✅ **Falla señalando `carreras/script.js:201 arranca sin guardián`** |
+| `test:duel` · `test:anticheat` · `test:cyber` · `test:collusion` · `test:ghost` | ✅ PASS |
+| `node scratch/check_bug_consistency.mjs` | ✅ 25 = 25 resueltos · 0 abiertos |
+
+* 🔴 **Nota metodológica:** la primera versión de la prueba en negativo **dio un
+  falso "OK"** porque `execFileSync` no puede capturar la salida de un hijo en este
+  entorno (`spawn EPERM`). La verificación válida se hizo **desde PowerShell**, que
+  sí captura la salida. Queda registrado para no repetir el error.
+
+* **Estado final: 25 bugs catalogados · 25 resueltos · 0 abiertos.**
+
+---
+
 ## 🎯 Próximos Pasos Inmediatos
 
 > El orden responde a riesgo, no a novedad. Ver [AUDITORIA_BUGS.md](AUDITORIA_BUGS.md) para el detalle de cada uno.

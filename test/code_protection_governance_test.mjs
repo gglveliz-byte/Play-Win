@@ -51,13 +51,34 @@ function collectFiles(dir, files = []) {
 
 const allCodeFiles = [...collectFiles('apps'), ...collectFiles('packages')];
 
-console.log('--- 1. Auditoría de Límites de Tamaño (<350L estándar, <800L techo máximo) ---');
+console.log('--- 1. Auditoría de Límites de Tamaño (<350L estándar, <800L orquestadores) ---');
+
+/**
+ * ORQUESTADORES CENTRALES — techo de 800 líneas en lugar de 350.
+ *
+ * La Regla 1 de playwin-code-governance dice literalmente:
+ *   «Componentes Extendidos y Orquestadores Centrales (SDK, Motores, Routers):
+ *    Límite máximo e infranqueable de 800 líneas.»
+ *
+ * El Bridge SDK es un orquestador explícito en esa lista, así que su techo es
+ * 800. Aplicarle 350 era un error de esta prueba, no del código.
+ *
+ * La lista es EXPLÍCITA a propósito: nada de exclusiones por patrón amplio, para
+ * que no se cuelen archivos que sí deben cumplir las 350.
+ */
+const ORQUESTADORES = [
+  'packages/game-sdk/playwin-bridge.js',
+  'apps/hub/public/game-sdk/playwin-bridge.js',
+];
+
+const esOrquestador = (file) => ORQUESTADORES.some((o) => file.endsWith(o));
 
 runAudit('Ningún archivo estándar de frontend o backend supera las 350 líneas', () => {
   const violations = [];
   for (const file of allCodeFiles) {
     // Los motores legacy preexistentes en public/games se auditan por separado
     if (file.includes('public/games/')) continue;
+    if (esOrquestador(file)) continue; // techo propio de 800, ver abajo
     const lines = fs.readFileSync(file, 'utf8').split('\n').length;
     if (lines > 350) {
       violations.push(`${file} (${lines} líneas)`);
@@ -312,6 +333,83 @@ runAudit('Los componentes de cliente que usan constantes compartidas las importa
   // No es un fallo que no haya ninguno, pero sí debe existir al menos uno si hay
   // componentes que muestran premios o catálogo.
   assert.ok(usos.length >= 0, 'conteo de usos de /constants');
+});
+
+/**
+ * Un juego que llama a su función de arranque local SIN consultar antes al SDK
+ * crea una partida fantasma: el reloj corre y el HUD se pinta, pero no existe
+ * sala en el servidor y el marcador nunca se envía (BUG-025).
+ *
+ * Esta prueba vigila los puntos de entrada conocidos de los 4 motores.
+ */
+runAudit('Los juegos no arrancan partidas locales saltándose al árbitro (BUG-025)', () => {
+  /**
+   * Estrategia directa y verificable, sin heurísticos de ventana:
+   *
+   *  1. Un arranque es LEGÍTIMO si está a 3 líneas o menos de `onMatchLive`
+   *     (así lo define playwin-game-bridge Regla 4).
+   *  2. Cualquier OTRO arranque es un disparador local (tecla, botón, clic) y
+   *     debe estar precedido inmediatamente por el guardián `canStartLocally`.
+   *
+   * Se comprobó en negativo: quitando el guardián, esta prueba falla.
+   */
+  const MOTORES = [
+    'apps/hub/public/games/carreras/script.js',
+    'apps/hub/public/games/space/script.js',
+    'apps/hub/public/games/flapy-flapy/script.js',
+  ];
+
+  const ARRANQUE = /(startRace\(\)|startGame\(\))/;
+  const GUARDIAN = /canStartLocally/;
+
+  const violaciones = [];
+
+  for (const archivo of MOTORES) {
+    if (!fs.existsSync(archivo)) continue;
+    const contenido = fs.readFileSync(archivo, 'utf8');
+    const lineas = contenido.split('\n');
+
+    /**
+     * Un archivo puede envolver el guardián en un helper para no repetirlo
+     * (patrón DRY, ej. `const puedeArrancarLocal = () => … canStartLocally() …`).
+     * Se descubren esos nombres buscando cada declaración que mencione
+     * `canStartLocally` en su línea o en las 3 siguientes (tolerando que la
+     * declaración continúe en varias líneas).
+     */
+    const nombresGuardian = new Set(['canStartLocally']);
+    for (let i = 0; i < lineas.length; i++) {
+      const decl = lineas[i].match(/(?:const|let|var|function)\s+(\w+)/);
+      if (!decl) continue;
+      const bloque = lineas.slice(i, i + 4).join('\n');
+      if (GUARDIAN.test(bloque)) nombresGuardian.add(decl[1]);
+    }
+    const guardianRegex = new RegExp(`(${[...nombresGuardian].join('|')})`);
+
+    for (let i = 0; i < lineas.length; i++) {
+      if (!ARRANQUE.test(lineas[i])) continue;
+      if (/function\s+\w*[Ss]tart/.test(lineas[i])) continue;
+
+      // Arranque legítimo del SDK: onMatchLive en las 3 líneas previas.
+      const previas = lineas.slice(Math.max(0, i - 3), i).join('\n');
+      if (/onMatchLive/.test(previas)) continue;
+
+      // El guardián puede estar en la MISMA línea (ej. `if (puedeArrancarLocal()) startGame();`)
+      // o en las 3 anteriores. No se mira más atrás para no dar por bueno un
+      // guardián que pertenece a otro ámbito.
+      const contexto = previas + '\n' + lineas[i];
+      if (!guardianRegex.test(contexto)) {
+        violaciones.push(
+          `${archivo}:${i + 1} arranca sin guardián -> ${lineas[i].trim().slice(0, 90)}`
+        );
+      }
+    }
+  }
+
+  assert.equal(
+    violaciones.length,
+    0,
+    `Arranques locales sin guardián (partida fantasma sin árbitro):\n${violaciones.join('\n')}`
+  );
 });
 
 console.log(`\n🏁 Resultado Final de Auditoría: ${passCount}/${totalTests} pruebas aprobadas.`);

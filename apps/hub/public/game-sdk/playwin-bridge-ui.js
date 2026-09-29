@@ -77,7 +77,48 @@
         '<div class="pw-btn-stack" style="margin-top:20px;">' +
         '<button id="pw-btn-auth-login" class="pw-btn-pill">INICIAR SESIÓN / REGISTRARSE</button>' +
         '<button id="pw-btn-auth-back" class="pw-btn-pill pw-btn-secondary">VOLVER AL HUB</button></div>' +
+      '</div></div>' +
+
+      // 6. Servidor de duelos no disponible (ver BUG-022)
+      // Se muestra cuando la conexión falla ANTES de empezar la partida. Antes
+      // ese fallo era mudo y el jugador se quedaba mirando el radar para siempre.
+      '<div id="pw-screen-offline" class="pw-screen"><div class="pw-card">' +
+        '<div class="pw-badge">SERVICIO NO DISPONIBLE</div>' +
+        '<div class="pw-avatar-bubble" style="margin:0 auto 16px;font-size:32px;">🛰️</div>' +
+        '<h2 class="pw-title">Duelos fuera de línea</h2>' +
+        '<p class="pw-subtitle">No pudimos contactar con el servidor de duelos. ' +
+        'Los juegos en línea no están disponibles en este momento.</p>' +
+        '<p id="pw-offline-detail" class="pw-offline-detail"></p>' +
+        '<div class="pw-btn-stack" style="margin-top:20px;">' +
+        '<button id="pw-btn-retry" class="pw-btn-pill">REINTENTAR CONEXIÓN</button>' +
+        '<button id="pw-btn-offline-back" class="pw-btn-pill pw-btn-secondary">VOLVER AL HUB</button></div>' +
       '</div></div>'
     );
   };
+  /**
+   * Inyecta la hoja de estilos, el contenedor y el markup de las 5 pantallas.
+   * Idempotente: si ya está inyectado, no hace nada.
+   *
+   * @param {object} player Sesión del jugador (avatar, username, skillRating, rank).
+   * @returns {boolean} true si inyectó ahora, false si ya existía.
+   */
+  function inject(player) {
+    if (document.getElementById('playwin-ui-layer')) return false;
+
+    if (!document.getElementById('playwin-bridge-css')) {
+      var link = document.createElement('link');
+      link.id = 'playwin-bridge-css';
+      link.rel = 'stylesheet';
+      link.href = window.PLAYWIN_SDK_CSS_URL || '/game-sdk/playwin-bridge.css';
+      document.head.appendChild(link);
+    }
+
+    var container = document.createElement('div');
+    container.id = 'playwin-ui-layer';
+    container.innerHTML = window.PLAYWIN_UI_MARKUP(player);
+    document.body.appendChild(container);
+    return true;
+  }
+
+  window.PLAYWIN_UI = { inject: inject, markup: function (p) { return window.PLAYWIN_UI_MARKUP(p); } };
 })();

@@ -133,18 +133,38 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **1 abierto** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · **BUG-025** ❌ |
-| 🟠 **Alto** | **1 abierto** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · **BUG-022** ❌ |
-| 🟡 **Medio** | **1 abierto** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · **BUG-024** ❌ |
+| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ |
+| 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
+| 🟡 **Medio** | **0 abiertos** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **22 de 25** | Todos menos BUG-022, BUG-024 y BUG-025 |
+| ✅ **Resueltos** | **25 de 25** | Todos |
 
-> **Aritmética:** **25 bugs catalogados = 22 resueltos · 3 abiertos · 0 parciales.**
+> **Aritmética:** **25 bugs catalogados = 25 resueltos · 0 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
->
-> **Los 3 abiertos forman una sola familia: el juego no respeta el ciclo del árbitro.**
-> BUG-025 hace que el juego arranque por su cuenta; BUG-022 oculta los fallos de
-> conexión; BUG-024 no explica la espera. **Arreglarlos juntos es un solo hito.**
+
+### ✅ Cierre del Hito C.3 — el juego respeta al árbitro (2026-09-29)
+
+| Bug | Arreglo | Verificación |
+| :--- | :--- | :--- |
+| **BUG-025** 🔴 | Guardián `PlayWin.canStartLocally()` (siempre `false` con el SDK cargado) + blindaje de los **6 disparadores locales** en 3 motores: `Enter` en carreras, botones de space, botones de flapy-flapy. `sky` ya era correcto. | Prueba nueva en gobernanza (12/12). **Probada en negativo:** quitando el guardián, la suite señala `carreras/script.js:201 arranca sin guardián`. |
+| **BUG-022** 🟠 | Nuevo `playwin-bridge-connection.js`: el fallo de conexión se avisa **siempre** (no solo en partida), con **timeout de 10 s**, pantalla elegante de *"Duelos fuera de línea"*, detalle con la URL intentada y botón **REINTENTAR CONEXIÓN**. | El SDK ya no puede fallar en silencio. |
+| **BUG-024** 🟡 | Tras 15 s esperando, el radar explica la verdad: *"Los rivales de entrenamiento están desactivados, así que la espera puede alargarse"*. | Mensaje condicionado a que la partida no haya empezado. |
+
+**Modularización del SDK** (la Regla 1 prevé techo de 800 líneas para SDK/orquestadores, pero se dividió igualmente por claridad):
+
+| Módulo | Líneas | Responsabilidad |
+| :--- | :--- | :--- |
+| `playwin-bridge.js` | ~396 | Lógica del protocolo (orquestador; techo 800) |
+| `playwin-bridge-ui.js` | 124 | Markup de las 6 pantallas + inyección del DOM |
+| `playwin-bridge-connection.js` | 111 | Ciclo de vida del WebSocket |
+| `playwin-bridge-status.js` | 67 | Avisos y pantalla de indisponibilidad |
+| `playwin-bridge.css` | 349 | Tokens y estilos |
+
+**Corrección de la propia suite:** la comprobación de tamaño aplicaba **350 líneas al Bridge SDK**, cuando la Regla 1 le asigna **800** por ser orquestador explícito. Se corrigió la prueba (no el código) con una **lista explícita** de orquestadores.
+
+**Pantallas del ciclo, ahora 6:**
+`#pw-screen-mm` (radar) · `#pw-screen-vs` (versus) · `#pw-live-hud` · `#pw-screen-result` ·
+`#pw-screen-auth` · **`#pw-screen-offline`** (nueva: servidor no disponible)
 
 ---
 
@@ -153,7 +173,7 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🔴 **Crítico** (viola la regla fundacional «el servidor es el único árbitro») |
-| **Estado** | ❌ **ABIERTO** — detectado el 2026-09-29 |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | Los 4 juegos: `carreras/script.js:195-199` · `space/script.js:1065-1071` · `flapy-flapy/script.js:1423,1430,1561` · `sky/js/game.js:273` |
 
 **Síntoma reportado:** *"inicié con la cuenta de una persona, le di a iniciar partida y se puso así — no salió el menú de espera. No inicia."*
@@ -214,7 +234,7 @@ onMatchLive: () => { startRace(); updateHUD(); }   // ✅ el correcto
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟠 Alto (UX crítico: el jugador cree que el sistema está roto) |
-| **Estado** | ❌ **ABIERTO** — detectado el 2026-09-29 durante el análisis de una partida que "no arrancaba" |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `packages/game-sdk/playwin-bridge.js:137-147` |
 
 **Síntoma reportado:** *"inicié una partida y se quedó así… ¿por qué no sale el panel de espera?"*
@@ -292,7 +312,7 @@ node --env-file=.env.test packages/database/scripts/diagnose.mjs
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟡 Medio |
-| **Estado** | ❌ **ABIERTO** — consecuencia directa de desactivar los bots |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `packages/game-sdk/playwin-bridge.js` (pantalla `#pw-screen-mm`) |
 
 **Contexto:** los bots se apagaron por decisión de producto (BUG-021). Efecto colateral: un jugador solo en la cola **espera indefinidamente** viendo el radar, sin saber que no va a llegar nadie.
