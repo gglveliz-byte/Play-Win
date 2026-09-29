@@ -133,16 +133,79 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ |
+| 🔴 **Crítico** | **1 abierto** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · **BUG-025** ❌ |
 | 🟠 **Alto** | **1 abierto** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · **BUG-022** ❌ |
 | 🟡 **Medio** | **1 abierto** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · **BUG-024** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **22 de 24** | Todos menos BUG-022 y BUG-024 |
+| ✅ **Resueltos** | **22 de 25** | Todos menos BUG-022, BUG-024 y BUG-025 |
 
-> **Aritmética:** **24 bugs catalogados = 22 resueltos · 2 abiertos · 0 parciales.**
+> **Aritmética:** **25 bugs catalogados = 22 resueltos · 3 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
 >
-> **Los 2 abiertos son de la misma familia:** el SDK no comunica al jugador lo que ocurre cuando no puede conectar (BUG-022) ni cuando espera sin que nadie entre (BUG-024).
+> **Los 3 abiertos forman una sola familia: el juego no respeta el ciclo del árbitro.**
+> BUG-025 hace que el juego arranque por su cuenta; BUG-022 oculta los fallos de
+> conexión; BUG-024 no explica la espera. **Arreglarlos juntos es un solo hito.**
+
+---
+
+### 🔴 BUG-025 · Los juegos arrancan carreras LOCALES saltándose el árbitro del servidor
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (viola la regla fundacional «el servidor es el único árbitro») |
+| **Estado** | ❌ **ABIERTO** — detectado el 2026-09-29 |
+| **Ubicación** | Los 4 juegos: `carreras/script.js:195-199` · `space/script.js:1065-1071` · `flapy-flapy/script.js:1423,1430,1561` · `sky/js/game.js:273` |
+
+**Síntoma reportado:** *"inicié con la cuenta de una persona, le di a iniciar partida y se puso así — no salió el menú de espera. No inicia."*
+Las capturas muestran la arena con el HUD en `0 KM/H · TIEMPO 20 · 0 M` en **dos ventanas a la vez**.
+
+**Causa raíz (verificada en el código):**
+
+```javascript
+// apps/hub/public/games/carreras/script.js:195-199
+if (k === 'enter') {
+    if (gameState === STATE_TITLE || gameState === STATE_GAMEOVER) {
+        startRace();          // ← arranca una carrera LOCAL, sin servidor
+    }
+}
+```
+
+Cada juego conserva **sus propios disparadores de arranque local** de cuando eran juegos de un solo jugador. Al pulsarlos, el juego entra en `STATE_PLAYING` y el reloj empieza a correr **sin que exista partida en el servidor**:
+
+* `startRace()` hace `time = maxTime` (20 s) y `gameState = STATE_PLAYING`.
+* El HUD queda en `0 KM/H · 20 · 0 M`.
+* El coche **no se mueve**, porque el juego sólo llama a `PlayWin.sendTick()` cuando `PlayWin.isLive()` es verdadero.
+
+**Resultado:** el jugador cree que está en una partida que nunca empezó. Y si pulsa el botón antes de encolar, **nunca llega a la pantalla de espera** — que es exactamente el síntoma de la primera captura.
+
+**Contradicción con la skill `playwin-game-bridge`:**
+
+> *Regla 4: «El bucle arranca en `onMatchLive`. No antes.»*
+
+Los 4 juegos **incumplen** esa regla. El arranque correcto ya existe y funciona (`carreras/script.js:1310-1313`):
+
+```javascript
+onMatchLive: () => { startRace(); updateHUD(); }   // ✅ el correcto
+```
+
+**Inventario de disparadores locales a desactivar:**
+
+| Juego | Ubicación | Disparador |
+| :--- | :--- | :--- |
+| carreras | `script.js:195-199` | Tecla `Enter` |
+| space | `script.js:1065` | Botón `#btn_start` |
+| space | `script.js:1068` | Botón `#btn_restart` |
+| space | `script.js:1071` | Botón `#btn_restart_pause` |
+| flapy-flapy | `script.js:1423, 1430, 1561` | Tecla / clic / botón |
+| sky | `js/game.js:273` | Tecla / clic |
+
+**Arreglo propuesto:**
+1. Crear un guardián en el SDK: `PlayWin.canStartLocally()` → `true` **solo** si el SDK NO está presente (modo práctica / página suelta), `false` cuando hay SDK cargado.
+2. Envolver los 6-8 disparadores locales con ese guardián. **Micro-edición quirúrgica**: no reestructurar los motores (están congelados por gobernanza).
+3. Documentarlo en cada motor con un comentario de una línea.
+4. Prueba automatizada que detecte si algún juego vuelve a arrancar sin `isLive()`.
+
+**Nota:** los motores de `public/games/` están **congelados contra el engorde** (`playwin-code-governance`). El arreglo debe ser mínimo: **un `if` por disparador**, sin refactorizar.
 
 ---
 

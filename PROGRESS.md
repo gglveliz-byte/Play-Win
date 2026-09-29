@@ -534,6 +534,57 @@ sin saber que no va a llegar nadie.
 
 ---
 
+### 🔴 Hito C.2: Causa raíz de "no inicia" — arranque local sin árbitro · `VERIFICADO`
+
+**Fecha:** 2026-09-29 · **Bug:** BUG-025 (CRÍTICO, nuevo)
+
+* **Síntoma:** *"inicié con la cuenta de una persona, le di a iniciar partida y se puso así — no salió el menú de espera. No inicia."*
+  Dos ventanas mostrando `0 KM/H · TIEMPO 20 · 0 M` a la vez.
+
+* **Causa raíz encontrada en el código:**
+
+```javascript
+// apps/hub/public/games/carreras/script.js:195-199
+if (k === 'enter') {
+    if (gameState === STATE_TITLE || gameState === STATE_GAMEOVER) {
+        startRace();          // ← carrera LOCAL, sin servidor
+    }
+}
+```
+
+* **Qué ocurre exactamente:**
+  1. El jugador pulsa `Enter` (o el botón de inicio) **antes** de encolar.
+  2. El juego entra en `STATE_PLAYING` y pone `time = 20` por su cuenta.
+  3. El HUD muestra `0 KM/H · 20 · 0 M` y el coche **no se mueve**.
+  4. El motivo de que no se mueva: el juego sólo envía ticks si `PlayWin.isLive()` es verdadero… pero el reloj local **sí** corre.
+  5. Como nunca se encoló, **la pantalla de espera no aparece nunca**.
+
+* **Por qué es CRÍTICO:** viola la regla fundacional del proyecto (*«el servidor es el único árbitro»*) y la Regla 4 de `playwin-game-bridge` (*«el bucle arranca en `onMatchLive`»*).
+
+* **Alcance — los 4 juegos lo incumplen:**
+
+| Juego | Disparadores locales |
+| :--- | :--- |
+| carreras | tecla `Enter` (`script.js:195-199`) |
+| space | botones `#btn_start`, `#btn_restart`, `#btn_restart_pause` (`script.js:1065-1071`) |
+| flapy-flapy | tecla / clic / botón (`script.js:1423, 1430, 1561`) |
+| sky | tecla / clic (`js/game.js:273`) |
+
+* **El arranque correcto YA existe y funciona** (`carreras/script.js:1310-1313`):
+  `onMatchLive: () => { startRace(); updateHUD(); }`
+
+* **Arreglo propuesto (micro-hito C.3):**
+  1. Guardián en el SDK: `PlayWin.canStartLocally()`.
+  2. Envolver los disparadores locales con él. **Un `if` por disparador** — los motores
+     están congelados por gobernanza, no se reestructuran.
+  3. Prueba que detecte si algún juego vuelve a arrancar sin respetar el ciclo.
+
+* **Estado tras este hito:** 25 bugs catalogados · 22 resueltos · **3 abiertos**
+  (BUG-025, BUG-022, BUG-024 — los tres de la misma familia: el juego no respeta el
+  ciclo del árbitro ni comunica lo que pasa).
+
+---
+
 ## 🎯 Próximos Pasos Inmediatos
 
 > El orden responde a riesgo, no a novedad. Ver [AUDITORIA_BUGS.md](AUDITORIA_BUGS.md) para el detalle de cada uno.
