@@ -5,7 +5,7 @@
   'use strict';
   // Versión de la API del SDK. Debe coincidir con la de playwin-bridge-connection.js
   // y con el ?v= que llevan las etiquetas <script> de los juegos.
-  const SDK_VERSION = 4;
+  const SDK_VERSION = 5;
   let WS_URL = window.PLAYWIN_WS_URL || 'ws://localhost:3001/ws';
   const isInIframe = window.parent && window.parent !== window;
 
@@ -211,6 +211,9 @@
   // Procesa los eventos que llegan del servidor de duelos.
   function handleServerMessage(event) {
     const msg = JSON.parse(event.data);
+    // Traza visible en la consola del navegador (F12). Imprescindible para
+    // diagnosticar por qué una partida se queda parada sin tocar el código.
+    console.log(`[PlayWin SDK] ◀ ${msg.event}`, msg);
     {
       if (msg.event === 'SECURITY_ERROR') {
         showScreen('pw-screen-auth');
@@ -251,9 +254,8 @@
       if (myEl) myEl.textContent = localScore;
     }
     if (msg.opponent?.score != null) updateHudOpponentScore(msg.opponent.score);
-    if (matchCallbacks.onMatchLive) {
-      matchCallbacks.onMatchLive({ seed: currentSeed, isResume: true, opponent: opponentData });
-    }
+    console.log('[PlayWin SDK] > MATCH_RESUME: reanudando partida en curso', { roomId: msg.roomId, status: msg.status });
+    invokeCallback('onMatchLive', { seed: currentSeed, isResume: true, opponent: opponentData });
   }
 
   function showScreen(screenId) {
@@ -280,6 +282,7 @@
 
   function handleMatchStart(msg) {
     stopWaitingNotice();
+    console.log('[PlayWin SDK] ▶ MATCH_START recibido', { roomId: msg.roomId, seed: msg.seed, opponent: msg.opponent?.username });
     currentRoomId = msg.roomId; currentSeed = msg.seed; opponentData = msg.opponent;
     document.getElementById('pw-opp-avatar').textContent = opponentData.avatar || '🎯';
     document.getElementById('pw-opp-name').textContent = opponentData.username;
@@ -292,7 +295,7 @@
     let count = 3;
     const countEl = document.getElementById('pw-countdown');
     countEl.textContent = count;
-    if (matchCallbacks.onMatchReady) matchCallbacks.onMatchReady({ seed: currentSeed, opponent: opponentData });
+    invokeCallback('onMatchReady', { seed: currentSeed, opponent: opponentData });
 
     const timer = setInterval(() => {
       count--;
@@ -301,11 +304,35 @@
     }, 1000);
   }
 
+  /**
+   * Invoca un callback del juego sin dejar que un fallo suyo rompa el SDK.
+   *
+   * Antes, si `onMatchLive()` del motor lanzaba una excepción, ésta subía por el
+   * manejador del WebSocket y el jugador se quedaba con el HUD puesto y el juego
+   * parado, SIN NINGÚN MENSAJE. Ahora el error se registra con su traza.
+   *
+   * @param {string} nombre Nombre del callback (para el registro).
+   * @param {object} datos Argumento que recibe el callback.
+   */
+  function invokeCallback(nombre, datos) {
+    const fn = matchCallbacks[nombre];
+    if (typeof fn !== 'function') {
+      console.warn(`[PlayWin SDK] El juego no definió el callback "${nombre}".`);
+      return;
+    }
+    try {
+      fn(datos);
+    } catch (err) {
+      console.error(`[PlayWin SDK] El callback "${nombre}" del juego lanzó un error:`, err);
+    }
+  }
+
   function handleMatchLive() {
     isMatchLive = true;
     showScreen(null);
     document.getElementById('pw-live-hud').classList.add('active');
-    if (matchCallbacks.onMatchLive) matchCallbacks.onMatchLive({ seed: currentSeed });
+    console.log('[PlayWin SDK] ▶ MATCH_LIVE: arrancando el juego', { seed: currentSeed });
+    invokeCallback('onMatchLive', { seed: currentSeed });
   }
 
   function handleMatchEnd(msg) {
@@ -326,7 +353,7 @@
     if (isInIframe) {
       window.parent.postMessage({ type: 'PLAYWIN_MATCH_COMPLETED', winnerId: msg.winnerId, isWin, payout: msg.payout }, '*');
     }
-    if (matchCallbacks.onMatchEnd) matchCallbacks.onMatchEnd({ isWin, payout: msg.payout });
+    invokeCallback('onMatchEnd', { isWin, payout: msg.payout });
   }
 
   function updateHudOpponentScore(oppScore) {

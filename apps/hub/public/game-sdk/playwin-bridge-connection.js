@@ -23,7 +23,7 @@
 
   // Versión de la API del SDK. Se compara con la que espera el puente para
   // detectar que el navegador sirvió una copia cacheada de otro módulo.
-  var SDK_VERSION = 4;
+  var SDK_VERSION = 5;
 
   /**
    * Crea el gestor de conexión de una sesión de juego.

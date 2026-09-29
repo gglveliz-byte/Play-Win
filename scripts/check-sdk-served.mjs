@@ -5,7 +5,16 @@
  */
 import fs from 'node:fs';
 
-const VERSION_ESPERADA = '4';
+/**
+ * La versión de caché vive en scratch/sync_sdk_scripts.mjs (fuente única). Se lee
+ * de ahí en vez de duplicarla aquí, porque antes quedó desincronizada y este
+ * comprobador daba falsos avisos.
+ */
+const VERSION_ESPERADA = (() => {
+  const fuente = fs.readFileSync('scratch/sync_sdk_scripts.mjs', 'utf8');
+  const m = fuente.match(/const VERSION = '(\d+)'/);
+  return m ? m[1] : '?';
+})();
 const JUEGOS = ['carreras', 'flapy-flapy', 'space'];
 
 console.log('═══ SERVIDOR DE DUELOS (:3001) ═══');
