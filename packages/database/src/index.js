@@ -72,3 +72,24 @@ export { passportService } from './services/passports.js';
 export { matchService } from './services/matches.js';
 export { leagueService } from './services/leagues.js';
 export { ledgerService } from './services/ledger.js';
+
+// Constantes de negocio compartidas (única fuente de verdad)
+export {
+  LEDGER_TYPES,
+  LEDGER_PROVIDERS,
+  LEDGER_STATUS,
+  LEAGUE_PRIZE_POOL,
+  PRIZE_SPLIT,
+  MMR_DELTAS,
+  MMR_MID_RANGE,
+  MMR_LOW_RANGE,
+  SEASON_POINTS,
+  INITIAL_SKILL_RATING,
+  RANK_TIERS,
+  RANK_TIER_THRESHOLDS,
+  resolveRankTier,
+  GAMES,
+  GAME_IDS,
+  RECONNECT_GRACE_MS,
+  GHOST_MATCH_TIMEOUT_MS,
+} from './constants.js';

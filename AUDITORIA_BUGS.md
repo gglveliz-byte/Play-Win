@@ -44,7 +44,7 @@ Los bugs de este documento **no son suposiciones por lectura**: se verificaron e
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟠 Alto |
-| **Estado** | ❌ ABIERTO (nuevo, detectado por verificación) |
+| **Estado** | ❌ ABIERTO |
 | **Evidencia** | `SELECT rank_tier, COUNT(*) FROM game_passports GROUP BY rank_tier` → **178 pasaportes, 178 en `BRONZE`. Cero en cualquier otra división.** |
 
 **Descripción:** `assignPlayerToLeague()` recibe `rankTier` con valor por defecto `'BRONZE'` y **ningún llamador lo calcula desde `skill_rating`**. No existe la función de mapeo MMR → división. El resultado es que **el 100% de los jugadores de la plataforma compite en Bronce**, sin importar su habilidad.
@@ -60,7 +60,7 @@ Los bugs de este documento **no son suposiciones por lectura**: se verificaron e
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟠 Alto |
-| **Estado** | ❌ ABIERTO (nuevo, detectado por verificación) |
+| **Estado** | ❌ ABIERTO |
 | **Evidencia** | 5 ligas con **10 miembros y `is_locked = false`** · global: 21 ligas abiertas vs 8 selladas |
 
 **Descripción:** `is_locked` **solo** se pone en `TRUE` al cerrar la temporada (`settle.ts:124`). El diseño (`playwin-league-engine` §2, `ARQUITECTURA_SISTEMA_ESPORTS.md` §5) exige que *"tan pronto el jugador #10 entra, el grupo se sella con `isLocked = true`"*.
@@ -134,14 +134,32 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
 | 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ |
-| 🟠 **Alto** | **6 abiertos** | BUG-003 · BUG-004 · BUG-006 · BUG-007 · BUG-019 · BUG-020 |
-| 🟡 **Medio** | **6 abiertos** | BUG-008 · BUG-009 · BUG-010 · BUG-012 · BUG-013 · BUG-016 |
+| 🟠 **Alto** | **3 abiertos** | BUG-003 · BUG-019 · BUG-020 |
+| 🟡 **Medio** | **2 abiertos** | BUG-008 · BUG-009 |
 | ⚪ **Bajo** | **1 abierto** | BUG-014 |
-| 🟡 **Parciales** | **2** | BUG-011 *(`detectCollusion` solo en producción, por diseño)* · BUG-015 *(payout sin API real)* |
-| ✅ **Resueltos** | **6** | BUG-001 · BUG-002 · BUG-005 · BUG-017 · BUG-018 · BUG-021 |
+| 🟡 **Parciales** | **2** | BUG-011 *(`detectCollusion` solo en producción)* · BUG-015 *(payout sin API real)* |
+| ✅ **Resueltos** | **13** | BUG-001 · 002 · 004 · 005 · 006 · 007 · 010 · 012 · 013 · 016 · 017 · 018 · 021 |
 
-> **Aritmética verificada:** **21 bugs catalogados** = **13 abiertos** + **2 parciales** + **6 resueltos**.
-> Comprobación automática: `node scratch/check_bug_consistency.mjs` (clasifica por marcador ❌/⚠️/✅, no por texto).
+> **Aritmética:** **21 bugs catalogados** = **6 abiertos** + **2 parciales** + **13 resueltos**.
+> Comprobación automática: `node scratch/check_bug_consistency.mjs`
+
+### ✅ Resueltos en el bloque 2º (2026-09-29)
+
+| Bug | Cómo se arregló | Verificación |
+| :--- | :--- | :--- |
+| **BUG-006** | `duel_test.js` reescrito: arranca su propio servidor en puerto efímero, firma `MatchTicket` reales y tiene timeout global de 40 s. Añadida aserción de que un cliente **sin ticket es rechazado**. | `npm run test:duel` → **exit 0** (semilla idéntica, ticks bidireccionales, `MATCH_END` del servidor) |
+| **BUG-004** | Columnas corregidas (`type`, `rank_tier`); autorización de administrador con `users.is_admin` (migración idempotente aplicada); tipos de ledger desde `LEDGER_TYPES`; el panel ahora **muestra el error** en vez de ceros. | `GET /api/admin/metrics` sin sesión → **401** (antes 500) |
+| **BUG-010** | Creado `lib/rate-limit.ts` (ventana deslizante) aplicado a login (10/min), register (20/h) y forgot-password (10/15min). | 11 intentos de login → el 11º devuelve **429** con `Retry-After` |
+| **BUG-012** | Creado `lib/api-response.ts` con `unauthorized()` uniforme; wallet devuelve **401** como history; ningún `err.message` crudo al cliente. | Ambas rutas → **401** (antes 200 vs 401) |
+| **BUG-013** | El alta completa (usuario + 4 pasaportes + 4 ligas) ocurre en **una transacción** con `SELECT ... FOR UPDATE`; los correos se envían tras el commit. | `test:e2e` crea usuarios reales y completa el flujo → **exit 0** |
+| **BUG-016** | `server.on('error')` con mensaje accionable para `EADDRINUSE`; `--env-file=.env.test` en todas las suites; `load-env.js` sin dependencias. | Arranque sin `JWT_SECRET` → bloqueado con mensaje claro |
+| **BUG-007** | Eliminado el fallback que etiquetaba a cualquier usuario como `'ORO'`/1850/240. El lobby devuelve pilotos reales, conteo real y la división **del pasaporte del jugador** (o `null`). | `divisionTier` ya no existe · `totalActiveInDivision` = pilotos reales |
+
+**Arquitectura nueva:** `packages/database/src/constants.js` (única fuente de verdad de tipos de ledger, premios, MMR, divisiones y catálogo de juegos) · `apps/hub/src/lib/api-response.ts` · `apps/hub/src/lib/rate-limit.ts` · `packages/database/scripts/grant-admin.mjs`.
+
+**Bug adicional detectado y corregido:** `e2e_flow_test.mjs` enviaba `JOIN_MATCH` **sin `token`** (mismo defecto que `duel_test`), por lo que se colgaba; y **no llamaba a `process.exit(0)`** en el camino de éxito, así que el proceso nunca terminaba.
+
+---
 
 ### ✅ Resueltos en el bloque 1º (2026-09-29)
 
@@ -336,7 +354,7 @@ Existen dos implementaciones paralelas de exactamente la misma lógica de negoci
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟠 Alto |
-| **Estado** | ❌ ABIERTO (dos defectos en un archivo) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `apps/hub/src/app/api/admin/metrics/route.ts:1-63` · `apps/hub/src/app/admin/page.tsx:29,86,94,217` |
 
 **Descripción — defecto A (el endpoint siempre falla):**
@@ -424,7 +442,7 @@ Tres fallos encadenados:
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟠 Alto |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `apps/realtime-server/test/duel_test.js:7,21-32,108-124` |
 
 **Descripción:**
@@ -468,7 +486,7 @@ TIMEOUT after 30s -> KILLED
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟠 Alto |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `apps/hub/src/app/api/games/lobby/route.ts:102-122` |
 
 **Descripción:**
@@ -529,7 +547,7 @@ Además `apps/hub/src/components/GameLauncherModal.tsx:106-107` quema `rank: 'OR
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟡 Medio |
-| **Estado** | ❌ ABIERTO (documentado como resuelto en la bitácora) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `api/auth/login/route.ts:5` · `api/auth/forgot-password/route.ts` |
 
 **Descripción:** El Hito 6.6 (Vector 3) afirma que existe un rate limiter de "máx 10 intentos por IP/minuto en las rutas de autenticación de Next.js". **No existe ninguna implementación**: no hay contador, ni en memoria ni en Redis, ni middleware. No hay tokens CSRF; la sesión es una cookie `sameSite: lax`.
@@ -545,7 +563,7 @@ Además `apps/hub/src/components/GameLauncherModal.tsx:106-107` quema `rank: 'OR
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟡 Medio |
-| **Estado** | ⚠️ PARCIAL / por diseño |
+| **Estado** | ⚠️ PARCIAL |
 | **Ubicación** | `apps/realtime-server/src/anticheat.js:263` · `apps/realtime-server/src/rooms.js:97-108` |
 
 **Descripción:** La detección de misma IP solo se activa con `NODE_ENV === 'production'` (`anticheat.js:263`). En `rooms.js:97,106` el modo dev además permite que dos pestañas del **mismo usuario** se emparejen entre sí (renombrando al segundo a `" (Tab 2)"`, `rooms.js:109`) y saltándose el bloqueo por colusión.
@@ -561,7 +579,7 @@ Además `apps/hub/src/components/GameLauncherModal.tsx:106-107` quema `rank: 'OR
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟡 Medio |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `api/wallet/transactions/route.ts:25:13` · `api/auth/verify-email/route.ts:54` vs `:25-28` · `admin/page.tsx:16-26` · `page.tsx:80-84` · `api/games/lobby/route.ts:106-111` |
 
 **Descripción:**
@@ -581,7 +599,7 @@ Además `apps/hub/src/components/GameLauncherModal.tsx:106-107` quema `rank: 'OR
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟡 Medio |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `apps/hub/src/app/api/auth/register/route.ts:57-77` |
 
 **Descripción:** El registro hace `createUser` → crear 4 pasaportes → asignar slot de liga, **cada paso en su propia transacción**. Si un paso intermedio falla, queda un usuario a medio construir. Los fallos de envío de email se tragan (`:69-71`), así que tampoco hay señal.
@@ -597,7 +615,7 @@ Además `apps/hub/src/components/GameLauncherModal.tsx:106-107` quema `rank: 'OR
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟡 Medio |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `apps/realtime-server/src/server.js:5,88-91` |
 
 **Descripción:** `server.js` lee `process.env.PORT` (`:5`), pero **nada carga el archivo `.env`** en el servidor de duelos. No hay `dotenv` ni `--env-file` en `apps/realtime-server/package.json`, así que en la práctica siempre cae al `3001` por defecto, ignorando el `PORT=3001` del `.env` raíz. Además, un `EADDRINUSE` provoca un crash con traza sin capturar (sin mensaje útil ni código de salida controlado).
@@ -642,7 +660,7 @@ Un proceso huérfano de una ejecución anterior de `test:all` mantuvo el puerto 
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | ⚪ Bajo |
-| **Estado** | ⚠️ INCOMPLETO (documentado como completo) |
+| **Estado** | ⚠️ PARCIAL |
 | **Ubicación** | `apps/hub/src/app/api/payments/paypal/payout/route.ts:44-76` |
 
 **Descripción:** El endpoint valida el saldo, hace el débito atómico y registra el asiento `WITHDRAWAL`, pero **no invoca la API de PayPal Payouts**. El dinero sale del saldo del usuario sin que se emita ningún pago. Las variables `PAYPAL_CLIENT_ID`/`PAYPAL_SECRET` no están configuradas.
@@ -658,7 +676,7 @@ Un proceso huérfano de una ejecución anterior de `test:all` mantuvo el puerto 
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | ⚪ Bajo (pero con alto costo de confusión) |
-| **Estado** | ✅ RESUELTO POR ESTA AUDITORÍA |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `PROGRESS.md` (reescrito) · `DOCUMENTACION_PROYECTO.md` (nuevo) |
 
 **Descripción:** La bitácora afirmaba cosas que la ejecución desmiente. Se documentan aquí para que nadie vuelva a confiar en ellas:
@@ -684,7 +702,7 @@ Un proceso huérfano de una ejecución anterior de `test:all` mantuvo el puerto 
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | ⚪ Bajo (pero con alto costo de confusión) |
-| **Estado** | ✅ **RESUELTO** el 2026-09-29 (queda pendiente la prevención) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `.agents/skills/*/SKILL.md` |
 
 **Descripción:**

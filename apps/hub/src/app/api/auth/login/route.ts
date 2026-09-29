@@ -1,17 +1,36 @@
 import { NextResponse } from 'next/server';
 import { userService } from '@/lib/db';
 import { authLib } from '@/lib/auth';
+import { badRequest, unauthorized as unauthorizedResponse, tooManyRequests, serverError } from '@/lib/api-response';
+import { checkRateLimit, clientIpFrom } from '@/lib/rate-limit';
+
+/** Máximo de intentos de login por IP dentro de la ventana. */
+const LOGIN_LIMIT = 10;
+const LOGIN_WINDOW_MS = 60_000;
 
 export async function POST(req: Request) {
   try {
+    // Rate limit ANTES de tocar la base de datos: así un atacante no puede
+    // provocar trabajo de bcrypt (que es deliberadamente costoso) ni consultas.
+    const ip = clientIpFrom(req);
+    const limit = checkRateLimit({
+      name: 'auth:login',
+      key: ip,
+      limit: LOGIN_LIMIT,
+      windowMs: LOGIN_WINDOW_MS,
+    });
+    if (!limit.allowed) {
+      return tooManyRequests(
+        `Demasiados intentos de inicio de sesión. Espera ${limit.retryAfterSeconds} segundos.`,
+        limit.retryAfterSeconds
+      );
+    }
+
     const body = await req.json();
     const { identifier, password } = body; // identifier puede ser username o email
 
     if (!identifier || !password) {
-      return NextResponse.json(
-        { error: 'Usuario y contraseña requeridos.' },
-        { status: 400 }
-      );
+      return badRequest('Usuario y contraseña requeridos.');
     }
 
     const trimmed = identifier.trim();
@@ -21,18 +40,12 @@ export async function POST(req: Request) {
     }
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'Credenciales inválidas. Revisa tu usuario y contraseña.' },
-        { status: 401 }
-      );
+      return unauthorizedResponse('Credenciales inválidas. Revisa tu usuario y contraseña.');
     }
 
     const isValid = await authLib.verifyPassword(password, user.password_hash);
     if (!isValid) {
-      return NextResponse.json(
-        { error: 'Credenciales inválidas. Revisa tu usuario y contraseña.' },
-        { status: 401 }
-      );
+      return unauthorizedResponse('Credenciales inválidas. Revisa tu usuario y contraseña.');
     }
 
     // Generar Token JWT
@@ -67,11 +80,7 @@ export async function POST(req: Request) {
     });
 
     return response;
-  } catch (err: any) {
-    console.error('[API Login Error]', err);
-    return NextResponse.json(
-      { error: 'Error del servidor al iniciar sesión.' },
-      { status: 500 }
-    );
+  } catch (err) {
+    return serverError(err, 'POST /api/auth/login');
   }
 }

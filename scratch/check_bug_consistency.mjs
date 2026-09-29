@@ -55,6 +55,8 @@ if (declarado) {
   console.log(
     `\nLa tabla declara: ${dTotal} catalogados = ${dAbiertos} abiertos + ${dParciales} parciales + ${dResueltos} resueltos`
   );
+  const reales = `${total} catalogados = ${abiertos.length} abiertos + ${parciales.length} parciales + ${resueltos.length} resueltos`;
+  console.log(`Realidad        : ${reales}`);
   const ok =
     dTotal === total &&
     dAbiertos === abiertos.length &&

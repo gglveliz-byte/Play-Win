@@ -13,11 +13,27 @@
  * ==========================================================================
  */
 
-const WS_URL = 'ws://localhost:3001/ws';
-const HUB_URL = 'http://localhost:3000';
+/**
+ * URLs configurables por entorno.
+ *
+ * El puerto del servidor de duelos se puede cambiar con TEST_WS_PORT: si el
+ * 3001 está ocupado por un proceso ajeno (por ejemplo un servidor anterior que
+ * no se pudo detener), la suite puede apuntar a un puerto libre sin editar código.
+ */
+const HUB_URL = process.env.TEST_HUB_URL || 'http://localhost:3000';
+const WS_URL = process.env.TEST_WS_URL || `ws://localhost:${process.env.TEST_WS_PORT || 3001}/ws`;
+
+/** Ninguna fase de la prueba debe colgarse indefinidamente. */
+const GLOBAL_TIMEOUT_MS = 120000;
+const globalTimeout = setTimeout(() => {
+  console.error(`\n❌ TIMEOUT GLOBAL: la prueba E2E superó ${GLOBAL_TIMEOUT_MS} ms.`);
+  process.exit(1);
+}, GLOBAL_TIMEOUT_MS);
+globalTimeout.unref?.();
 
 async function runE2EFlow() {
   console.log('🚀 Iniciando Prueba E2E de Play Win...');
+  console.log(`   Hub: ${HUB_URL} · WebSocket: ${WS_URL}`);
 
   // 1. Registro de Jugador 1
   const rand1 = Math.random().toString(36).slice(2, 7);
@@ -89,28 +105,17 @@ async function runE2EFlow() {
     ws1.onopen = () => {
       ws1.send(JSON.stringify({
         action: 'JOIN_MATCH',
-        player: {
-          id: player1.id,
-          username: player1.username,
-          avatar: player1.avatar_url,
-          rank: 'ORO',
-          skillRating: 1820,
-          gameId: 'carreras',
-        },
+        // El servidor EXIGE el MatchTicket firmado y sobrescribe la identidad
+        // con sus claims. Enviar id/username sin token provoca SECURITY_ERROR
+        // y la partida nunca empieza (Zero Client Trust).
+        player: { token: ticket1Data.token, gameId: 'carreras' },
       }));
     };
 
     ws2.onopen = () => {
       ws2.send(JSON.stringify({
         action: 'JOIN_MATCH',
-        player: {
-          id: player2.id,
-          username: player2.username,
-          avatar: player2.avatar_url,
-          rank: 'ORO',
-          skillRating: 1800,
-          gameId: 'carreras',
-        },
+        player: { token: ticket2Data.token, gameId: 'carreras' },
       }));
     };
 
@@ -167,7 +172,21 @@ async function runE2EFlow() {
   console.log('\n🎉 ¡PRUEBA E2E COMPLETADA CON ÉXITO! Todos los sistemas sincronizados en Neon PostgreSQL.');
 }
 
-runE2EFlow().catch((err) => {
-  console.error('❌ Error en prueba E2E:', err);
-  process.exit(1);
-});
+/**
+ * Salida determinista.
+ *
+ * Antes el camino de éxito NO llamaba a process.exit, así que si quedaba
+ * cualquier handle abierto (un socket, un temporizador) el proceso nunca
+ * terminaba y `npm run test:e2e` se quedaba colgado sin explicación.
+ * Ahora el resultado siempre cierra el proceso con el código correcto.
+ */
+runE2EFlow()
+  .then(() => {
+    clearTimeout(globalTimeout);
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error('❌ Error en prueba E2E:', err);
+    clearTimeout(globalTimeout);
+    process.exit(1);
+  });

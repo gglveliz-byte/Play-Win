@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { passportService, query } from '@/lib/db';
+import { authLib } from '@/lib/auth';
+import { serverError } from '@/lib/api-response';
 
 export const GAME_DETAILS: Record<string, any> = {
   'carreras': {
@@ -98,19 +101,42 @@ export async function GET(request: Request) {
     const gameId = searchParams.get('gameId') || 'carreras';
     const gameInfo = GAME_DETAILS[gameId] || GAME_DETAILS['carreras'];
 
-    // 1. Obtener jugadores reales de la base de datos Neon PostgreSQL para este juego
-    let activePlayers = await passportService.getGameLeaderboard(gameId, 8);
+    // 1. Jugadores REALES con pasaporte en este juego, ordenados por Season Points.
+    const activePlayers = await passportService.getGameLeaderboard(gameId, 8);
 
-    // 2. Si hay menos de 4 pasaportes registrados para este juego, enriquecer con usuarios de la plataforma
-    if (activePlayers.length < 4) {
-      const fallbackUsers = await query(
-        `SELECT id as user_id, username, avatar_url, 'ORO' as rank_tier, 1850 as skill_rating, 240 as season_points, 4 as wins, 1 as losses, 0 as best_score
-         FROM users
-         ORDER BY created_at DESC
-         LIMIT 8;`
+    // 2. División y Skill Rating del jugador autenticado, leídos de SU pasaporte.
+    //
+    // Antes esta ruta devolvía datos inventados: a cualquier usuario se le
+    // etiquetaba como 'ORO' con 1850 de MMR y 240 Season Points, y la división
+    // era la cadena fija 'DIVISIÓN ORO #3'. Mostrar eso al jugador es engañoso
+    // (BUG-007). Ahora, si no hay datos reales, se dice explícitamente que no
+    // los hay en lugar de fabricarlos.
+    let viewer: {
+      rankTier: string;
+      skillRating: number;
+      seasonPoints: number;
+      inLeague: boolean;
+    } | null = null;
+
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get('playwin_session')?.value;
+    const payload = sessionToken ? authLib.verifyToken(sessionToken) : null;
+
+    if (payload?.userId) {
+      const passportRes = await query(
+        `SELECT rank_tier, skill_rating, season_points
+         FROM game_passports
+         WHERE user_id = $1 AND game_id = $2;`,
+        [payload.userId, gameId]
       );
-      if (fallbackUsers.rows.length > 0) {
-        activePlayers = fallbackUsers.rows;
+      if (passportRes.rows.length > 0) {
+        const passport = passportRes.rows[0];
+        viewer = {
+          rankTier: passport.rank_tier,
+          skillRating: passport.skill_rating,
+          seasonPoints: passport.season_points,
+          inLeague: true,
+        };
       }
     }
 
@@ -118,14 +144,12 @@ export async function GET(request: Request) {
       success: true,
       game: gameInfo,
       activePlayers,
-      totalActiveInDivision: Math.max(activePlayers.length, 6),
-      divisionTier: 'DIVISIÓN ORO #3',
+      // Conteo REAL de participantes con pasaporte en este juego.
+      totalActiveInDivision: activePlayers.length,
+      // División REAL del jugador que consulta, o null si no tiene pasaporte.
+      viewer,
     });
-  } catch (err: any) {
-    console.error('[API /api/games/lobby error]', err);
-    return NextResponse.json(
-      { success: false, error: err.message || 'Error cargando lobby' },
-      { status: 500 }
-    );
+  } catch (err) {
+    return serverError(err, 'GET /api/games/lobby');
   }
 }

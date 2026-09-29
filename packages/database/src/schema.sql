@@ -16,12 +16,20 @@ CREATE TABLE IF NOT EXISTS users (
     paypal_email VARCHAR(255),
     wallet_balance NUMERIC(12, 2) DEFAULT 0.00,
     is_verified BOOLEAN DEFAULT FALSE,
+    is_admin BOOLEAN DEFAULT FALSE,
     verification_token VARCHAR(255),
     reset_token VARCHAR(255),
     reset_token_expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migración idempotente para bases de datos ya creadas antes de existir is_admin.
+-- CREATE TABLE IF NOT EXISTS no altera tablas existentes, así que esta línea es
+-- necesaria para que el panel de administración pueda autorizar (BUG-004).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_users_admin ON users(is_admin) WHERE is_admin = TRUE;
 
 -- 2. Pasaporte Competitivo por Videojuego (Rangos, MMR y Estadísticas)
 CREATE TABLE IF NOT EXISTS game_passports (

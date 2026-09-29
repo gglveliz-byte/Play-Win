@@ -113,14 +113,23 @@ console.log(`Hub detectado en ${BASE} (GET /api/auth/me → ${health.status})\n$
   if (r.status !== 200 || !r.json) {
     verdict('BUG-007-API', 'Lobby devuelve datos fabricados', 'PARCIAL', `HTTP ${r.status} · ${r.text.slice(0, 120)}`);
   } else {
-    const body = JSON.stringify(r.json);
-    const sospechosos = [];
-    if (/"skillRating"\s*:\s*1850/.test(body)) sospechosos.push('skillRating 1850 hardcodeado');
-    if (/DIVISIÓN ORO #3/.test(body)) sospechosos.push('divisionTier "DIVISIÓN ORO #3" hardcodeado');
-    if (/"totalActiveInDivision"\s*:\s*6/.test(body)) sospechosos.push('totalActiveInDivision 6 fabricado');
+    // Se comprueban los CAMPOS concretos que estaban fabricados, no el JSON
+    // entero: un piloto real puede tener legítimamente 1850 de MMR, así que
+    // buscar ese número en toda la respuesta daría un falso positivo.
+    const fabricados = [];
+    if (r.json.divisionTier !== undefined) fabricados.push(`campo divisionTier presente ("${r.json.divisionTier}")`);
+    if (r.json.totalActiveInDivision !== (r.json.activePlayers?.length ?? 0)) {
+      fabricados.push(`totalActiveInDivision=${r.json.totalActiveInDivision} no coincide con los pilotos reales (${r.json.activePlayers?.length ?? 0})`);
+    }
+    // El fallback fabricado etiquetaba a TODOS los pilotos con la misma división fija.
+    const tiers = new Set((r.json.activePlayers ?? []).map((p) => p.rank_tier));
+    if (tiers.size === 1 && tiers.has('ORO')) fabricados.push('todos los pilotos etiquetados como ORO (fallback simulado)');
+
     verdict('BUG-007-API', 'Lobby devuelve datos fabricados al usuario',
-      sospechosos.length > 0 ? 'CONFIRMADO' : 'PARCIAL',
-      sospechosos.length ? sospechosos.join(' · ') : `no se detectaron los valores fabricados · muestra: ${body.slice(0, 220)}`);
+      fabricados.length > 0 ? 'CONFIRMADO' : 'FALSO POSITIVO',
+      fabricados.length
+        ? fabricados.join(' · ')
+        : `sin datos fabricados · pilotos reales: ${r.json.activePlayers?.length ?? 0} · viewer: ${r.json.viewer ? 'presente' : 'null'}`);
   }
 }
 

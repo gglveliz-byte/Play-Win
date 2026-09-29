@@ -1,127 +1,214 @@
-import { WebSocket } from 'ws';
+import assert from 'node:assert';
+import { createServer } from 'node:http';
+import { WebSocketServer, WebSocket } from 'ws';
+import crypto from 'node:crypto';
+import { RoomManager } from '../src/rooms.js';
+// Carga JWT_SECRET del entorno (.env / .env.test). Sin fallback quemado.
+import '../src/load-env.js';
 
 /**
- * Test de Verificación Quirúrgica: Duelo 1v1 en Tiempo Real
- * Valida: Conexión -> Matchmaking -> Semilla Idéntica -> Conteo 3s -> MATCH_LIVE -> Ticks -> Muerte Súbita -> Fin de Partida
+ * ============================================================================
+ * PLAY WIN — PRUEBA QUIRÚRGICA DE DUELO 1v1 (duel_test.js)
+ * ============================================================================
+ * Valida el ciclo completo del protocolo:
+ *   Conexión → Matchmaking → SEMILLA IDÉNTICA → Countdown → MATCH_LIVE
+ *   → Ticks bidireccionales → Fin de partida → MATCH_END del servidor
+ *
+ * Historia de este archivo: la versión anterior conectaba a un servidor
+ * externo en el puerto 3001 (que nunca arrancaba) y enviaba JOIN_MATCH SIN
+ * token, cuando `rooms.js` ya lo exige. Se colgaba indefinidamente y bloqueaba
+ * `npm run test:all` (BUG-006). Ahora arranca su propio servidor y firma
+ * MatchTickets reales.
+ * ============================================================================
  */
-const WS_URL = 'ws://localhost:3001/ws';
 
-const testGameId = `test_duel_${Date.now()}`;
-console.log(`🧪 Iniciando prueba automatizada de salas 1v1 (Game: ${testGameId})...`);
-
-const ws1 = new WebSocket(WS_URL);
-let ws2 = null;
-
-let matchStartCount = 0;
-let seed1 = null;
-let seed2 = null;
-
-ws1.on('open', () => {
-  console.log('✅ Cliente 1 conectado. Encolando...');
-  ws1.send(
-    JSON.stringify({
-      action: 'JOIN_MATCH',
-      player: {
-        id: 'usr_test_1',
-        username: 'BatiRojo',
-        avatar: 'bat_red.webp',
-        gameId: testGameId,
-        rank: 'ORO',
-      },
-    })
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error(
+    'Falta JWT_SECRET. Ejecuta: npm run test:duel  (carga .env.test automáticamente)'
   );
-});
-
-ws1.on('message', (raw) => {
-  const msg = JSON.parse(raw.toString());
-
-  if (msg.event === 'MATCH_WAITING') {
-    console.log('⏳ Cliente 1 en espera de rival. Conectando Cliente 2...');
-    ws2 = new WebSocket(WS_URL);
-
-    ws2.on('open', () => {
-      console.log('✅ Cliente 2 conectado. Encolando para emparejar...');
-      ws2.send(
-        JSON.stringify({
-          action: 'JOIN_MATCH',
-          player: {
-            id: 'usr_test_2',
-            username: 'BatiAzul',
-            avatar: 'bat_blue.webp',
-            gameId: testGameId,
-            rank: 'ORO',
-          },
-        })
-      );
-    });
-
-    ws2.on('message', (raw2) => {
-      const msg2 = JSON.parse(raw2.toString());
-
-      if (msg2.event === 'MATCH_START') {
-        matchStartCount++;
-        seed2 = msg2.seed;
-        console.log(`🎯 Cliente 2 recibió MATCH_START. Semilla: ${seed2}. Rival: ${msg2.opponent.username}`);
-        checkBothStarted();
-      }
-
-      if (msg2.event === 'MATCH_LIVE') {
-        console.log('🏁 Partida en VIVO para Cliente 2. Enviando PLAYER_TICK...');
-        ws2.send(
-          JSON.stringify({
-            action: 'PLAYER_TICK',
-            x: 100,
-            y: 250,
-            score: 15,
-            isAlive: true,
-          })
-        );
-      }
-    });
-  }
-
-  if (msg.event === 'MATCH_START') {
-    matchStartCount++;
-    seed1 = msg.seed;
-    console.log(`🎯 Cliente 1 recibió MATCH_START. Semilla: ${seed1}. Rival: ${msg.opponent.username}`);
-    checkBothStarted();
-  }
-
-  if (msg.event === 'MATCH_LIVE') {
-    console.log('🏁 Partida en VIVO para Cliente 1.');
-  }
-
-  if (msg.event === 'RIVAL_TICK') {
-    console.log(`📡 Cliente 1 recibió RIVAL_TICK desde Cliente 2 (y=${msg.y}, score=${msg.score})`);
-    setTimeout(() => {
-      if (ws2 && ws2.readyState === WebSocket.OPEN) {
-        console.log('💥 Simulando choque de Cliente 2 (PLAYER_CRASHED)...');
-        ws2.send(JSON.stringify({ action: 'PLAYER_CRASHED' }));
-      }
-    }, 200);
-  }
-
-  if (msg.event === 'MATCH_END') {
-    console.log('🏆 Cliente 1 recibió MATCH_END:', msg.reason, '| Ganador (Neon UUID):', msg.winnerId);
-    if (msg.winnerId && msg.payout.winnerSeasonPoints === 100) {
-      console.log('🎉 ¡PRUEBA EXITOSA! Ambos clientes sincronizados, victoria y puntos validados al 100%.');
-      ws1.close();
-      if (ws2) ws2.close();
-      setTimeout(() => process.exit(0), 1000); // Dar 1s para que la promesa de Neon complete
-    } else {
-      console.error('❌ Error en el resultado de la partida');
-      process.exit(1);
-    }
-  }
-});
-
-function checkBothStarted() {
-  if (matchStartCount === 2) {
-    if (seed1 === seed2) {
-      console.log(`🔒 ¡VERIFICACIÓN DE SEMILLA EXITOSA! Ambos clientes tienen la misma semilla: ${seed1}`);
-    } else {
-      console.error(`❌ Las semillas no coinciden: ${seed1} !== ${seed2}`);
-      process.exit(1);
-    }
-  }
 }
+
+/** Timeout global: ninguna prueba debe colgarse para siempre. */
+const GLOBAL_TIMEOUT_MS = 40000;
+const timeoutHandle = setTimeout(() => {
+  console.error(`\n❌ TIMEOUT GLOBAL: la prueba superó ${GLOBAL_TIMEOUT_MS} ms sin terminar.`);
+  process.exit(1);
+}, GLOBAL_TIMEOUT_MS);
+timeoutHandle.unref?.();
+
+/** Puerto efímero: evita colisionar con un servidor ya en ejecución. */
+const TEST_PORT = Number(process.env.TEST_WS_PORT || 3199);
+
+function createMatchTicket(sub, username, gameId) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub,
+      username,
+      avatar: '🎮',
+      gameId,
+      exp: Math.floor(Date.now() / 1000) + 300,
+    })
+  ).toString('base64url');
+  const sig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('base64url');
+  return `${header}.${payload}.${sig}`;
+}
+
+/** Espera a que llegue un evento concreto por el socket. */
+function waitForEvent(socket, eventName, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.off('message', onMessage);
+      reject(new Error(`Timeout esperando el evento "${eventName}" tras ${timeoutMs} ms`));
+    }, timeoutMs);
+
+    function onMessage(raw) {
+      const msg = JSON.parse(raw.toString());
+      if (msg.event === eventName) {
+        clearTimeout(timer);
+        socket.off('message', onMessage);
+        resolve(msg);
+      }
+    }
+    socket.on('message', onMessage);
+  });
+}
+
+async function runDuelTest() {
+  console.log('🧪 [Duel Test] Prueba quirúrgica de salas 1v1 en tiempo real...\n');
+
+  // ── Servidor efímero propio ────────────────────────────────────────────────
+  const server = createServer();
+  const wss = new WebSocketServer({ server });
+  const roomManager = new RoomManager();
+
+  wss.on('connection', (socket) => {
+    socket.on('message', (raw) => {
+      const data = JSON.parse(raw.toString());
+      switch (data.action) {
+        case 'JOIN_MATCH':
+          roomManager.joinQueue(data.player, socket, '127.0.0.1');
+          break;
+        case 'PLAYER_TICK':
+          roomManager.handlePlayerTick(socket, data);
+          break;
+        case 'PLAYER_CRASHED':
+          roomManager.handlePlayerCrash(socket);
+          break;
+        case 'PLAYER_FINISH':
+          roomManager.handlePlayerFinish(socket, data);
+          break;
+        case 'PING':
+          socket.send(JSON.stringify({ event: 'PONG', clientTime: data.clientTime || 0, time: Date.now() }));
+          break;
+        default:
+          break;
+      }
+    });
+    socket.on('close', () => roomManager.handleDisconnect(socket));
+    socket.on('error', () => roomManager.handleDisconnect(socket));
+  });
+
+  await new Promise((resolve) => server.listen(TEST_PORT, resolve));
+  const wsUrl = `ws://localhost:${TEST_PORT}`;
+  console.log(`✅ Servidor de prueba escuchando en ${wsUrl}`);
+
+  const gameId = `duel_test_${Date.now()}`;
+  const tickets = {
+    a: createMatchTicket('usr_duel_a', 'BatiRojo', gameId),
+    b: createMatchTicket('usr_duel_b', 'BatiAzul', gameId),
+  };
+
+  /** Seguridad: un JOIN_MATCH sin token debe ser rechazado. */
+  const noTokenSocket = new WebSocket(wsUrl);
+  await new Promise((resolve) => noTokenSocket.on('open', resolve));
+  noTokenSocket.send(JSON.stringify({ action: 'JOIN_MATCH', player: { id: 'intruso', username: 'intruso', gameId } }));
+  const securityError = await waitForEvent(noTokenSocket, 'SECURITY_ERROR');
+  assert.ok(securityError.message, 'SECURITY_ERROR debe traer un mensaje');
+  console.log(`✅ Cliente sin MatchTicket rechazado: "${securityError.message}"`);
+  noTokenSocket.close();
+
+  // ── Dos clientes legítimos ─────────────────────────────────────────────────
+  const clientA = new WebSocket(wsUrl);
+  await new Promise((resolve) => clientA.on('open', resolve));
+  clientA.send(JSON.stringify({ action: 'JOIN_MATCH', player: { token: tickets.a, gameId } }));
+  await waitForEvent(clientA, 'MATCH_WAITING');
+  console.log('⏳ Cliente A en cola. Conectando cliente B...');
+
+  const clientB = new WebSocket(wsUrl);
+  await new Promise((resolve) => clientB.on('open', resolve));
+  const startA = waitForEvent(clientA, 'MATCH_START');
+  clientB.send(JSON.stringify({ action: 'JOIN_MATCH', player: { token: tickets.b, gameId } }));
+  const startB = waitForEvent(clientB, 'MATCH_START');
+
+  const [matchStartA, matchStartB] = await Promise.all([startA, startB]);
+
+  assert.strictEqual(matchStartA.seed, matchStartB.seed, 'Ambos jugadores DEBEN recibir la misma semilla PRNG');
+  assert.ok(Number.isInteger(matchStartA.seed), 'La semilla debe ser un entero');
+  assert.strictEqual(matchStartA.role, 'PLAYER_A');
+  assert.strictEqual(matchStartB.role, 'PLAYER_B');
+  // Los usernames se normalizan a minúsculas al persistirse en la base de datos,
+  // así que la comparación es insensible a mayúsculas a propósito.
+  assert.strictEqual(matchStartA.opponent.username.toLowerCase(), 'batiazul');
+  assert.strictEqual(matchStartB.opponent.username.toLowerCase(), 'batirojo');
+  console.log(`✅ MATCH_START con SEMILLA IDÉNTICA: ${matchStartA.seed}`);
+
+  // ── Countdown de 3s → MATCH_LIVE ───────────────────────────────────────────
+  const liveA = waitForEvent(clientA, 'MATCH_LIVE', 10000);
+  const liveB = waitForEvent(clientB, 'MATCH_LIVE', 10000);
+  await Promise.all([liveA, liveB]);
+  console.log('✅ MATCH_LIVE recibido por ambos tras el conteo.');
+
+  // ── Ticks bidireccionales ──────────────────────────────────────────────────
+  const rivalTickB = waitForEvent(clientB, 'RIVAL_TICK');
+  clientA.send(JSON.stringify({ action: 'PLAYER_TICK', x: 120, y: 0, score: 64, isAlive: true }));
+  const tickFromA = await rivalTickB;
+  assert.strictEqual(tickFromA.score, 64, 'El rival debe recibir el puntaje remitido');
+  assert.strictEqual(tickFromA.x, 120);
+
+  const rivalTickA = waitForEvent(clientA, 'RIVAL_TICK');
+  clientB.send(JSON.stringify({ action: 'PLAYER_TICK', x: 40, y: 0, score: 21, isAlive: true }));
+  const tickFromB = await rivalTickA;
+  assert.strictEqual(tickFromB.score, 21);
+  console.log('✅ Telemetría retransmitida en ambos sentidos (RIVAL_TICK).');
+
+  // ── Fin de partida: gana quien más distancia acumuló ───────────────────────
+  // El juego de esta prueba usa el criterio por puntaje (no es 'carreras'),
+  // así que la victoria se resuelve con _resolveScoreWinner.
+  clientA.send(JSON.stringify({ action: 'PLAYER_TICK', x: 300, y: 0, score: 180, isAlive: true }));
+  await new Promise((r) => setTimeout(r, 120));
+  clientB.send(JSON.stringify({ action: 'PLAYER_TICK', x: 60, y: 0, score: 45, isAlive: true }));
+  await new Promise((r) => setTimeout(r, 120));
+
+  const endA = waitForEvent(clientA, 'MATCH_END', 12000);
+  const endB = waitForEvent(clientB, 'MATCH_END', 12000);
+  clientA.send(JSON.stringify({ action: 'PLAYER_FINISH', score: 180 }));
+
+  const [matchEndA, matchEndB] = await Promise.all([endA, endB]);
+
+  assert.strictEqual(matchEndA.winnerId, matchEndB.winnerId, 'Ambos deben recibir el MISMO veredicto');
+  assert.strictEqual(matchEndA.reason, 'HIGHER_SCORE');
+  assert.strictEqual(matchEndA.payout.winnerSeasonPoints, 100, 'El ganador recibe +100 Season Points');
+  assert.strictEqual(matchEndA.payout.loserSeasonPoints, 20, 'El perdedor recibe +20 Season Points');
+  assert.ok(matchEndA.summary && matchEndA.summary.length > 0, 'MATCH_END debe incluir un resumen');
+  console.log(`✅ MATCH_END emitido por el SERVIDOR (no por el cliente):`);
+  console.log(`     motivo  : ${matchEndA.reason}`);
+  console.log(`     resumen : ${matchEndA.summary}`);
+  console.log(`     premios : ganador +${matchEndA.payout.winnerSeasonPoints} SP · perdedor +${matchEndA.payout.loserSeasonPoints} SP`);
+
+  clientA.close();
+  clientB.close();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await new Promise((resolve) => server.close(resolve));
+
+  clearTimeout(timeoutHandle);
+  console.log('\n🎉 ¡DUELO 1v1 VERIFICADO AL 100%! Semilla determinista, relé de ticks y árbitro del servidor.');
+}
+
+runDuelTest()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('\n❌ FALLO EN LA PRUEBA DE DUELO:', err.message);
+    process.exit(1);
+  });

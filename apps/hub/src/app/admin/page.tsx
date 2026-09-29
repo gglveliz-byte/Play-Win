@@ -2,10 +2,20 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { LEDGER_TYPES } from '@playwin/database';
+
+/** Filas del resumen contable que devuelve /api/admin/metrics. */
+interface LedgerRow {
+  type: string;
+  provider: string;
+  count: number;
+  total_amount: string | number;
+}
 
 export default function AdminDashboardPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMetrics();
@@ -17,17 +27,37 @@ export default function AdminDashboardPage() {
     try {
       const res = await fetch('/api/admin/metrics');
       const json = await res.json();
+
+      // Antes se ignoraba res.ok: un 401/500 mostraba ceros en silencio,
+      // indistinguible de "no hay datos" (BUG-004).
+      if (!res.ok) {
+        setError(json?.error || `Error HTTP ${res.status}`);
+        setData(null);
+        return;
+      }
+
+      setError(null);
       if (json.success) setData(json);
     } catch (err) {
       console.error('[Admin fetch error]', err);
+      setError('No se pudo contactar con el servidor.');
     } finally {
       setLoading(false);
     }
   };
 
+  /**
+   * Suma el importe de un tipo de asiento contable.
+   * La columna real es `type` (no `entry_type`) y los tipos válidos salen de
+   * LEDGER_TYPES: buscar nombres inventados como 'WHOP_DEPOSIT' hacía que el
+   * panel mostrara siempre $0.00.
+   */
   const getLedgerTotal = (type: string) => {
-    const item = data?.ledgerSummary?.find((l: any) => l.entry_type === type);
-    return item ? Number(item.total_amount).toFixed(2) : '0.00';
+    const rows: LedgerRow[] = data?.ledgerSummary ?? [];
+    const total = rows
+      .filter((row) => row.type === type)
+      .reduce((sum, row) => sum + Number(row.total_amount || 0), 0);
+    return total.toFixed(2);
   };
 
   return (
@@ -60,6 +90,20 @@ export default function AdminDashboardPage() {
         <div style={{ textAlign: 'center', padding: '60px', color: 'var(--mute)' }}>
           Cargando telemetría en tiempo real desde Neon PostgreSQL...
         </div>
+      ) : error ? (
+        <div className="warm-card" style={{ borderColor: 'var(--orange)', textAlign: 'center', padding: '40px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--orange)', letterSpacing: '2px', marginBottom: '8px' }}>
+            NO SE PUDIERON CARGAR LAS MÉTRICAS
+          </div>
+          <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink)', margin: '0 0 8px' }}>{error}</p>
+          <p style={{ fontSize: '13px', color: 'var(--mute)', margin: 0 }}>
+            Este panel requiere una sesión con permisos de administrador. Concede el permiso con:
+            <br />
+            <code style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>
+              node --env-file=.env.test packages/database/scripts/grant-admin.mjs &lt;tu-usuario&gt;
+            </code>
+          </p>
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Tarjetas de Métricas Rápidas */}
@@ -83,7 +127,7 @@ export default function AdminDashboardPage() {
             <div className="warm-card">
               <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--mute)' }}>INGRESOS WHOP</span>
               <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--orange)', margin: '4px 0' }}>
-                +${getLedgerTotal('WHOP_DEPOSIT')} <span style={{ fontSize: '13px' }}>USD</span>
+                +${getLedgerTotal(LEDGER_TYPES.DEPOSIT)} <span style={{ fontSize: '13px' }}>USD</span>
               </div>
               <span style={{ fontSize: '12px', color: 'var(--mute)' }}>Pases y Suscripciones</span>
             </div>
@@ -91,7 +135,7 @@ export default function AdminDashboardPage() {
             <div className="warm-card">
               <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--mute)' }}>PREMIOS ENTREGADOS</span>
               <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--ink)', margin: '4px 0' }}>
-                ${getLedgerTotal('LEAGUE_PRIZE')} <span style={{ fontSize: '13px' }}>USD</span>
+                ${getLedgerTotal(LEDGER_TYPES.PRIZE_WIN)} <span style={{ fontSize: '13px' }}>USD</span>
               </div>
               <span style={{ fontSize: '12px', color: 'var(--mute)' }}>Bolsas semanales de $25 USD</span>
             </div>
@@ -214,7 +258,7 @@ export default function AdminDashboardPage() {
                     </span>
                   </div>
                   <div style={{ fontSize: '18px', fontWeight: 900, margin: '8px 0 4px' }}>
-                    División {l.tier}
+                    División {l.rank_tier}
                   </div>
                   <div style={{ fontSize: '13px', color: 'var(--mute)', marginBottom: '10px' }}>
                     Ocupación: <strong style={{ color: 'var(--ink)' }}>{l.member_count} / 10 Jugadores</strong>
