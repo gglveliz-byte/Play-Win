@@ -133,14 +133,18 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ |
+| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ |
 | 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
-| 🟡 **Medio** | **0 abiertos** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ |
+| 🟡 **Medio** | **1 abierto** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · **BUG-028** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **25 de 25** | Todos |
+| ✅ **Resueltos** | **27 de 28** | Todos menos BUG-028 |
 
-> **Aritmética:** **25 bugs catalogados = 25 resueltos · 0 abiertos · 0 parciales.**
+> **Aritmética:** **28 bugs catalogados = 27 resueltos · 1 abierto · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
+>
+> **El único abierto (BUG-028) no es un fallo de código: es una decisión de producto.**
+> *Sky Runner* tiene su página de arranque vacía; hay que reconstruirla o retirar el
+> juego del catálogo. Las dos opciones cambian lo que ve el jugador.
 
 ### ✅ Cierre del Hito C.3 — el juego respeta al árbitro (2026-09-29)
 
@@ -319,6 +323,122 @@ node --env-file=.env.test packages/database/scripts/diagnose.mjs
 
 **Arreglo propuesto:** tras 15 s esperando, cambiar el texto del radar a algo honesto:
 > *"Esperando rival humano… Los rivales de entrenamiento están desactivados. Entra con otra cuenta para probar, o pide que activen los bots."*
+
+---
+
+---
+
+### 🔴 BUG-026 · El guardián de BUG-025 bloqueaba el arranque con el SDK cacheado
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (la partida se emparejaba y los dos jugadores se quedaban quietos) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | Los 3 guardianes de los motores + versión del SDK |
+
+**Síntoma reportado:** *"no funciona amigo, incluso cuando no está perdido el servidor de websocket. Yo desconecté el websocket, le di reintentar y nada, no se conectó."*
+Las capturas muestran **dos jugadores reales emparejados** con `0 KM/H · 0 M` en ambos lados.
+
+**Evidencia recogida antes de tocar nada:**
+
+```
+$ node scripts/check-sdk-served.mjs
+  SERVIDOR DE DUELOS: EN LÍNEA · salas: 1 (humanas 1)
+    · duel_carreras_7ff98f58 [PLAYING] progamer2026 0 vs 0 carlos_pro
+```
+
+El servidor **sí emparejó** (semilla 4926714, `isGhostMatch: false`), pero los marcadores nunca subieron.
+
+**Causa raíz — el guardián que escribí en BUG-025 era peligroso:**
+
+```javascript
+if (window.PlayWin && !window.PlayWin.canStartLocally()) return;
+```
+
+Si el navegador sirve una **copia cacheada** de `playwin-bridge.js` (anterior al arreglo), entonces `canStartLocally` es `undefined`:
+
+```
+!undefined  ===  true   ->   BLOQUEA EL ARRANQUE
+```
+
+Y no bloquea sólo el arranque local: **bloquea también el legítimo del servidor** (`onMatchLive`), porque la guarda está en el mismo manejador. Resultado: el servidor empieza la partida, el jugador no puede arrancar su bucle, y los dos coches se quedan en la línea de salida **sin ningún aviso**.
+
+**Dos defectos de fondo:**
+
+1. **No había cache-busting.** Las etiquetas `<script>` no llevaban versión, así que el navegador reutilizaba el SDK antiguo indefinidamente. Se depuró durante horas un fallo que ya estaba arreglado en disco.
+2. **Un guardián nunca debe romper el camino feliz cuando falta información.** Asumir "función ausente = bloquear" convirtió una protección en un bloqueo total.
+
+**Arreglo aplicado:**
+
+1. **Guardián con semántica positiva y tolerante a versiones antiguas:**
+
+```javascript
+const tieneArbitroDelServidor = () =>
+    !!window.PlayWin &&
+    typeof window.PlayWin.canStartLocally === 'function' &&
+    !window.PlayWin.canStartLocally();
+
+if (!tieneArbitroDelServidor()) return;
+```
+
+Con un SDK viejo devuelve `false` y **no bloquea**: se degrada al comportamiento anterior en lugar de romperse.
+
+2. **Cache-busting en los 4 juegos:** `<script src="/game-sdk/playwin-bridge.js?v=4">`, etc. La versión vive en `scratch/sync_sdk_scripts.mjs` y **debe subirse al tocar el SDK**.
+
+3. **Detección de versiones mezcladas:** `playwin-bridge.js` y `playwin-bridge-connection.js` llevan `SDK_VERSION`. Si no coinciden, el jugador ve *"Versiones mezcladas del SDK. Recarga con Ctrl+Shift+R"* en lugar de un fallo mudo.
+
+**Verificación:** gobernanza **12/12** · `test:duel`, `test:ghost`, `test:anticheat` en verde · `scripts/check-sdk-served.mjs` confirma los 5 ficheros idénticos y los 4 scripts con `?v=4`.
+
+---
+
+### 🟡 BUG-027 · Reinicio automático de servidores en desarrollo
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🟡 Medio (herramienta de desarrollo, causa raíz de horas perdidas) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `scripts/dev-watch.mjs` (nuevo) · `npm run dev:watch` |
+
+**Contexto:** el usuario pidió explícitamente *"necesitamos que en cada cambio que hagamos los servidores se reinicien solos, porque veo que no funciona"*. Tenía razón: se editaba código y los servidores seguían con la versión antigua en memoria, así que se depuraban fallos ya arreglados.
+
+**Solución:** un vigilante que levanta **los dos servidores** y los reinicia solo:
+
+| Vigila | Reinicia |
+| :--- | :--- |
+| `apps/realtime-server/src` · `packages/database/src` · `.env` | Servidor de duelos |
+| `apps/hub/src` · `next.config.ts` · `.env.local` | Hub |
+| `packages/game-sdk` · `apps/hub/public/game-sdk` | **Los dos** (y avisa de recargar el navegador) |
+
+```powershell
+npm run dev:watch     # levanta :3000 y :3001 y los reinicia al guardar
+```
+`Ctrl+C` detiene los dos (mata el árbol de procesos completo en Windows).
+
+Además `apps/realtime-server` incorpora `dev:watch` con `node --watch` nativo.
+
+**Verificado:** arrancó ambos servidores correctamente (probado en puertos alternos para no interferir con los del usuario).
+
+---
+
+### 🟡 BUG-028 · `sky/index.html` está vacío: el juego no puede funcionar
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🟡 Medio |
+| **Estado** | ❌ **ABIERTO** — requiere decisión de producto |
+| **Ubicación** | `apps/hub/public/games/sky/index.html` (**0 bytes**) |
+
+**Hallazgo:** el cuarto juego anunciado en el Hub (*Sky Runner*) tiene su `index.html`
+**completamente vacío**. Los módulos existen (`js/game.js`, `js/renderer.js`,
+`js/audio.js`, `js/prng.js`, `script.js`) y `js/game.js` **ya llama a `PlayWin.init()`**,
+pero al no haber página no se carga nada: **el juego es inaccesible**.
+
+**Verificado:** `apps/hub/public/games/sky/index.html` pesa 0 bytes y no contiene
+ninguna etiqueta `<script>`.
+
+**Opciones:** (a) reconstruir la página de arranque, (b) retirar *Sky Runner* del Hub
+mientras no esté operativo. **No se toca sin decisión tuya**, porque afecta a lo que
+ve el jugador y al catálogo de la liga.
 
 ---
 

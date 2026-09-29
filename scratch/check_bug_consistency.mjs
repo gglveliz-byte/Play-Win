@@ -11,7 +11,7 @@ const parciales = [];
 const resueltos = [];
 const faltantes = [];
 
-for (let n = 1; n <= 30; n++) {
+for (let n = 1; n <= 40; n++) {
   const id = `BUG-${String(n).padStart(3, '0')}`;
   // Los encabezados varían en nivel (### o ####) y pueden llevar un emoji de
   // severidad delante, así que se busca el id como encabezado, no el prefijo.
@@ -55,7 +55,7 @@ console.log(`${'='.repeat(60)}`);
 // Formato A (resumen con resueltos primero):
 //   "**24 bugs catalogados = 22 resueltos · 2 abiertos · 0 parciales.**"
 const formatoA = raw.match(
-  /\*\*(\d+) bugs catalogados\s*=\s*(\d+) resueltos\s*·\s*(\d+) abiertos\s*·\s*(\d+) parciales\.\*\*/
+  /\*\*(\d+) bugs catalogados\s*=\s*(\d+) resueltos\s*·\s*(\d+) abiertos?\s*·\s*(\d+) parciales?\.\*\*/
 );
 // Formato B (resumen desglosado por severidad):
 //   "**21 bugs catalogados** = **13 abiertos** + **2 parciales** + **6 resueltos**"

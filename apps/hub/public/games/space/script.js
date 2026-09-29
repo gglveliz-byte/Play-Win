@@ -1065,17 +1065,21 @@
         // (onMatchLive). Estos botones son de cuando el juego era de un jugador:
         // si se pulsan antes de encolar, arrancan una partida fantasma en la que
         // el reloj corre pero el marcador nunca se envía al servidor.
-        var puedeArrancarLocal = function () {
-            return !window.PlayWin || (typeof window.PlayWin.canStartLocally === 'function' && window.PlayWin.canStartLocally());
+        // ¿Manda el servidor? Con un SDK cacheado sin canStartLocally se
+        // degrada al arranque local en vez de bloquearlo todo.
+        var tieneArbitroDelServidor = function () {
+            return !!window.PlayWin &&
+                typeof window.PlayWin.canStartLocally === 'function' &&
+                !window.PlayWin.canStartLocally();
         };
         var btnStart = document.getElementById('btn_start');
-        if (btnStart) btnStart.onclick = function () { if (puedeArrancarLocal()) self.startGame(); };
+        if (btnStart) btnStart.onclick = function () { if (!tieneArbitroDelServidor()) self.startGame(); };
 
         var btnRestart = document.getElementById('btn_restart');
-        if (btnRestart) btnRestart.onclick = function () { if (puedeArrancarLocal()) self.startGame(); };
+        if (btnRestart) btnRestart.onclick = function () { if (!tieneArbitroDelServidor()) self.startGame(); };
 
         var btnRestartPause = document.getElementById('btn_restart_pause');
-        if (btnRestartPause) btnRestartPause.onclick = function () { if (puedeArrancarLocal()) self.startGame(); };
+        if (btnRestartPause) btnRestartPause.onclick = function () { if (!tieneArbitroDelServidor()) self.startGame(); };
 
         var btnMenu = document.getElementById('btn_menu');
         if (btnMenu) btnMenu.onclick = function () { self.showTitleScreen(); };

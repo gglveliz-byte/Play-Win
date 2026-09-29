@@ -193,11 +193,17 @@ window.addEventListener('keydown', e => {
         e.preventDefault();
     }
     if (k === 'enter') {
+    // ¿Manda el servidor? Si el SDK existe pero está cacheado sin
+    // canStartLocally, se degrada al arranque local en vez de bloquearlo todo.
+    const tieneArbitroDelServidor = () =>
+        !!window.PlayWin &&
+        typeof window.PlayWin.canStartLocally === 'function' &&
+        !window.PlayWin.canStartLocally();
         // BUG-025: la partida NO se arranca localmente. Si el SDK está presente,
         // el único que decide cuándo empezar es el servidor (onMatchLive). Antes
         // esto iniciaba una carrera propia: el reloj corría y el HUD se pintaba,
         // pero no había partida en el servidor y el coche no se movía.
-        if (window.PlayWin && !window.PlayWin.canStartLocally()) return;
+        if (!tieneArbitroDelServidor()) return;
         if (gameState === STATE_TITLE || gameState === STATE_GAMEOVER) {
             startRace();
         }

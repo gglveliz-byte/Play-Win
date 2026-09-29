@@ -7,9 +7,34 @@
 
 ## ⚡ Arranque rápido
 
+### ✅ Opción recomendada: los dos servidores, con reinicio automático
+
+```powershell
+cd "C:\Users\HP\OneDrive\Documentos\GitHub\Play Win"
+npm run dev:watch
+```
+
+Levanta **el Hub (`:3000`) y el servidor de duelos (`:3001`)** a la vez y **los
+reinicia solos cuando guardas un cambio**. `Ctrl+C` detiene los dos.
+
+| Vigila | Reinicia |
+| :--- | :--- |
+| `apps/hub/src` · `next.config.ts` · `.env.local` | Hub |
+| `apps/realtime-server/src` · `packages/database/src` · `.env` | Servidor de duelos |
+| `packages/game-sdk` · `apps/hub/public/game-sdk` | **Los dos**, y avisa de recargar el navegador |
+
+> ⚠️ **Por qué existe:** antes se editaba código y los servidores seguían con la
+> versión antigua en memoria. Se depuraron durante horas fallos que ya estaban
+> arreglados en disco. Con el vigilante, lo que ves en pantalla corresponde
+> siempre a lo que hay en el repositorio.
+
+---
+
+### Opción manual: dos terminales
+
 Necesitas **dos terminales**: el Hub (web) y el servidor de duelos (WebSocket).
 
-### Terminal 1 — Hub (Next.js)
+#### Terminal 1 — Hub (Next.js)
 
 ```powershell
 cd "C:\Users\HP\OneDrive\Documentos\GitHub\Play Win"
@@ -164,6 +189,44 @@ Suites individuales:
 | `test:treasury` | Tesorería y cierre semanal | **Sí (:3000)** |
 | `test:email` | Correo y recuperación | **Sí (:3000)** |
 | `test:e2e` | Flujo completo con duelo real | **Sí (:3000 y :3001)** |
+
+---
+
+## 🔄 Si cambias el SDK, sube la versión de caché
+
+El navegador **reutiliza** `playwin-bridge.js` aunque el archivo cambie. Eso hizo
+perder horas depurando un fallo ya arreglado. Por eso los 4 juegos cargan el SDK
+con `?v=N`:
+
+```html
+<script src="/game-sdk/playwin-bridge-ui.js?v=4"></script>
+<script src="/game-sdk/playwin-bridge-status.js?v=4"></script>
+<script src="/game-sdk/playwin-bridge-connection.js?v=4"></script>
+<script src="/game-sdk/playwin-bridge.js?v=4"></script>
+```
+
+**Cada vez que toques `packages/game-sdk/`:**
+
+1. Sube `VERSION` en [sync_sdk_scripts.mjs](scratch/sync_sdk_scripts.mjs) (y el
+   `SDK_VERSION` de `playwin-bridge.js` y `playwin-bridge-connection.js`).
+2. Ejecuta:
+   ```powershell
+   npm run sync:sdk
+   ```
+3. Recarga el navegador con **`Ctrl+Shift+R`**.
+
+**Comprobar que todo está en orden:**
+
+```powershell
+node scripts/check-sdk-served.mjs
+```
+Verifica que los 5 ficheros del SDK son idénticos entre `packages/` y
+`apps/hub/public/`, que el Hub los sirve con la versión correcta y que el
+servidor de duelos está en línea.
+
+> 💡 **El SDK detecta versiones mezcladas:** si el navegador junta piezas de dos
+> versiones, el jugador ve *"Versiones mezcladas del SDK. Recarga con Ctrl+Shift+R"*
+> en vez de un fallo indescifrable.
 
 ---
 

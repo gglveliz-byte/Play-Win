@@ -1420,20 +1420,24 @@
     // BUG-025: con el SDK presente la partida la arranca SOLO el servidor
     // (onMatchLive). Estos botones son de cuando el juego era de un jugador:
     // pulsarlos antes de encolar arranca una partida fantasma sin rival.
-    const puedeArrancarLocal = () =>
-        !window.PlayWin || (typeof window.PlayWin.canStartLocally === 'function' && window.PlayWin.canStartLocally());
+    // ¿Manda el servidor? Con un SDK cacheado sin canStartLocally se degrada
+    // al arranque local en vez de bloquearlo todo.
+    const tieneArbitroDelServidor = () =>
+        !!window.PlayWin &&
+        typeof window.PlayWin.canStartLocally === 'function' &&
+        !window.PlayWin.canStartLocally();
 
     if (btnStart) {
         btnStart.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (puedeArrancarLocal()) startGame();
+            if (!tieneArbitroDelServidor()) startGame();
         });
     }
 
     if (btnRestart) {
         btnRestart.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (puedeArrancarLocal()) startGame();
+            if (!tieneArbitroDelServidor()) startGame();
         });
     }
 

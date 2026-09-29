@@ -21,6 +21,10 @@
   /** Tiempo máximo para establecer la conexión, en milisegundos. */
   var CONNECT_TIMEOUT_MS = 10000;
 
+  // Versión de la API del SDK. Se compara con la que espera el puente para
+  // detectar que el navegador sirvió una copia cacheada de otro módulo.
+  var SDK_VERSION = 4;
+
   /**
    * Crea el gestor de conexión de una sesión de juego.
    *
@@ -107,5 +111,9 @@
     };
   }
 
-  window.PLAYWIN_CONNECTION = { createConnectionManager: createConnectionManager, CONNECT_TIMEOUT_MS: CONNECT_TIMEOUT_MS };
+  window.PLAYWIN_CONNECTION = {
+    createConnectionManager: createConnectionManager,
+    CONNECT_TIMEOUT_MS: CONNECT_TIMEOUT_MS,
+    SDK_VERSION: SDK_VERSION,
+  };
 })();

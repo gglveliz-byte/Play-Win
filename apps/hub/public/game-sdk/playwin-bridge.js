@@ -3,6 +3,9 @@
 // Cumple AGENTS.md, playwin-realtime-duels y playwin-game-bridge.
 (function () {
   'use strict';
+  // Versión de la API del SDK. Debe coincidir con la de playwin-bridge-connection.js
+  // y con el ?v= que llevan las etiquetas <script> de los juegos.
+  const SDK_VERSION = 4;
   let WS_URL = window.PLAYWIN_WS_URL || 'ws://localhost:3001/ws';
   const isInIframe = window.parent && window.parent !== window;
 
@@ -161,7 +164,18 @@
     if (!currentPlayer || !currentPlayer.token) { showScreen('pw-screen-auth'); return; }
     if (!window.PLAYWIN_CONNECTION) {
       console.error('[PlayWin SDK] Falta /game-sdk/playwin-bridge-connection.js: cárgalo ANTES que playwin-bridge.js');
-      showOfflineScreen('Falta un componente del SDK en la página.');
+      showOfflineScreen('Falta un componente del SDK en la página. Recarga con Ctrl+Shift+R.');
+      return;
+    }
+    // Detecta módulos servidos desde caché con una versión distinta. Sin esto,
+    // el navegador mezcla piezas de dos versiones y el fallo es indescifrable.
+    var vConexion = window.PLAYWIN_CONNECTION.SDK_VERSION;
+    if (typeof vConexion === 'number' && vConexion !== SDK_VERSION) {
+      console.error(
+        `[PlayWin SDK] Versiones mezcladas: bridge v${SDK_VERSION} con conexión v${vConexion}. ` +
+        'Recarga la página con Ctrl+Shift+R.'
+      );
+      showOfflineScreen(`Versiones mezcladas del SDK (v${SDK_VERSION} y v${vConexion}). Recarga con Ctrl+Shift+R.`);
       return;
     }
     if (!connection) {

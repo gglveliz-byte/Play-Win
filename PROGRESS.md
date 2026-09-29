@@ -662,6 +662,61 @@ código**, con una lista explícita de orquestadores (nada de exclusiones amplia
 
 ---
 
+### 🔴 Hito C.4: El guardián de BUG-025 bloqueaba la partida (BUG-026) · `VERIFICADO`
+
+**Fecha:** 2026-09-29 · **Bugs:** BUG-026 (crítico) · BUG-027 · BUG-028 detectado
+
+* **Síntoma:** *"no funciona amigo… yo desconecté el websocket, le di reintentar y nada"*.
+  Las capturas muestran **dos jugadores reales emparejados** con `0 KM/H · 0 M`.
+
+* **Evidencia recogida ANTES de tocar código:**
+  ```
+  $ node scripts/check-sdk-served.mjs
+    SERVIDOR DE DUELOS: EN LÍNEA · salas: 1 (humanas 1)
+      · duel_carreras_7ff98f58 [PLAYING] progamer2026 0 vs 0 carlos_pro
+  ```
+  El servidor **sí emparejó** (semilla 4926714, `isGhostMatch: false`). Los marcadores
+  nunca subieron porque **el cliente no podía arrancar su bucle**.
+
+* **Causa raíz — mi propio guardián era peligroso:**
+  ```javascript
+  if (window.PlayWin && !window.PlayWin.canStartLocally()) return;
+  ```
+  Con un SDK **cacheado** (anterior al arreglo), `canStartLocally` es `undefined` y
+  `!undefined === true` → **bloquea el arranque**. Y no sólo el local: también el
+  legítimo del servidor (`onMatchLive`), porque la guarda está en el mismo manejador.
+
+* **Dos defectos de fondo:**
+  1. **No había cache-busting**: el navegador servía el SDK antiguo indefinidamente.
+  2. **Un guardián nunca debe romper el camino feliz cuando falta información.**
+
+* **Arreglos aplicados:**
+  1. **Semántica positiva y tolerante a versiones viejas:**
+     `const tieneArbitroDelServidor = () => !!window.PlayWin && typeof window.PlayWin.canStartLocally === 'function' && !window.PlayWin.canStartLocally();`
+     → con SDK viejo devuelve `false` y **no bloquea**; se degrada en lugar de romperse.
+  2. **Cache-busting** `?v=4` en los 4 juegos, centralizado en `sync_sdk_scripts.mjs`.
+  3. **Detección de versiones mezcladas** entre módulos del SDK, con aviso al jugador.
+
+* **BUG-027 (resuelto): reinicio automático de servidores** — el usuario lo pidió
+  explícitamente y tenía razón: se depuraban fallos ya arreglados porque los
+  servidores mantenían el código viejo en memoria. Nuevo `scripts/dev-watch.mjs`:
+  ```powershell
+  npm run dev:watch    # levanta :3000 y :3001 y los reinicia al guardar
+  ```
+  Vigila `apps/hub/src`, `apps/realtime-server/src`, `packages/database/src`,
+  `packages/game-sdk` y los `.env`. `Ctrl+C` detiene los dos.
+
+* **BUG-028 (abierto, decisión de producto):** `apps/hub/public/games/sky/index.html`
+  está **vacío (0 bytes)**. *Sky Runner* es inaccesible pese a que `js/game.js` ya
+  llama a `PlayWin.init()`. Hay que reconstruir la página o retirar el juego.
+
+* **Verificación:** gobernanza **12/12** · `test:duel`, `test:ghost`, `test:anticheat`
+  en verde · `check-sdk-served.mjs` confirma 5/5 ficheros idénticos y 4/4 scripts con `?v=4`.
+
+* **Estado: 28 bugs catalogados · 27 resueltos · 1 abierto (BUG-028).**
+
+---
+
 ## 🎯 Próximos Pasos Inmediatos
 
 > El orden responde a riesgo, no a novedad. Ver [AUDITORIA_BUGS.md](AUDITORIA_BUGS.md) para el detalle de cada uno.

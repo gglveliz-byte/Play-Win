@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node src/server.js",
+    "dev:watch": "node --watch --watch-path=./src --watch-path=../../packages/database/src src/server.js",
     "start": "node src/server.js",
     "test": "node test/network_scenarios_test.js && node test/anticheat_test.js && node test/carreras_anticheat_spec.js && node test/flapy_anticheat_spec.js && node test/cybersecurity_suite.js",
     "test:network": "node test/network_scenarios_test.js"

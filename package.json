@@ -10,6 +10,8 @@
   "scripts": {
     "dev:hub": "npm run dev --prefix apps/hub",
     "dev:realtime": "npm run dev --prefix apps/realtime-server",
+    "dev:watch": "node scripts/dev-watch.mjs",
+    "sync:sdk": "node scratch/sync_sdk_scripts.mjs",
     "build:hub": "npm run build --prefix apps/hub",
     "start:hub": "npm run start --prefix apps/hub",
     "test:db": "node --env-file=.env.test packages/database/test/services_test.js",
