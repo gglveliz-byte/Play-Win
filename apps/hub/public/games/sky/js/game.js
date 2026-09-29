@@ -14,6 +14,29 @@ import {
   cameraInFront,
 } from './renderer.js';
 
+// ==================================================================
+// GEOMETRÍA DE LA PISTA (una sola fuente de verdad)
+// ------------------------------------------------------------------
+// El renderer dibuja 7 carriles con `project(i - 3.5, ...)`, así que el carril
+// `i` ocupa la banda [i-3.5, i-2.5] y la pista completa abarca [-3.5, 3.5].
+//
+// Antes, el motor limitaba el movimiento a [-4.2, 4.2] (más ancho que la pista)
+// y calculaba el carril con `Math.round(x + 3)`, que devuelve valores de -1 a 7.
+// Los carriles válidos son 0..6, así que en los extremos la consulta
+// `row[columna]` daba `undefined`, el jugador se consideraba fuera de la pista y
+// CAÍA Y MORÍA sin haber hecho nada malo. Le pasaba en 2 de cada 9 posiciones.
+// ==================================================================
+const CARRILES = 7;
+
+/** Centro del carril ocupado por la posición `x`, siempre dentro de 0..6. */
+function carrilDe(x) {
+  const col = Math.floor(x + CARRILES / 2);
+  return Math.min(CARRILES - 1, Math.max(0, col));
+}
+
+/** Límite de movimiento: mantiene al jugador sobre la pista, nunca al borde. */
+const LIMITE_X = CARRILES / 2 - 0.1;
+
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d', { alpha: false });
 
@@ -87,7 +110,7 @@ function triggerJump() {
   jumpBufferTimer = 12;
 
   const currentRowIdx = (z + cameraInFront) | 0;
-  const currentColIdx = Math.round(x + 3);
+  const currentColIdx = carrilDe(x);
   const row = trackManager.getRow(currentRowIdx);
   const isOverTrack = row && row[currentColIdx];
 
@@ -174,14 +197,14 @@ function updatePhysics() {
     else steerInput = Lerp(0.32, steerInput, 0);
 
     x += steerInput * 0.11;
-    x = Clamp(x, -4.2, 4.2);
+    x = Clamp(x, -LIMITE_X, LIMITE_X);
 
     if (jumpBufferTimer > 0) jumpBufferTimer--;
     y += (vy -= 0.006);
     z += Math.min(0.5, 0.2 + z / 5000);
 
     const currentRowIdx = (z + cameraInFront) | 0;
-    const currentColIdx = Math.round(x + 3);
+    const currentColIdx = carrilDe(x);
     const row = trackManager.getRow(currentRowIdx);
     const isOverTrack = row && row[currentColIdx];
 
@@ -241,7 +264,7 @@ function gameLoop(timeMS = 0) {
   drawRivalGhost(ctx, rival, x, z, canvasWidth, canvasHeight, isPortrait);
 
   const currentRowIdx = (z + cameraInFront) | 0;
-  const currentColIdx = Math.round(x + 3);
+  const currentColIdx = carrilDe(x);
   const row = trackManager.getRow(currentRowIdx);
   const isOverTrack = row && row[currentColIdx];
   drawPlayerBall(ctx, x, y, z, canvasWidth, canvasHeight, isPortrait, isOverTrack);

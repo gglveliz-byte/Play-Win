@@ -133,13 +133,13 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ |
+| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ |
 | 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
-| 🟡 **Medio** | **2 abiertos** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-033** ❌ |
+| 🟡 **Medio** | **2 abiertos** (BUG-028 · BUG-033) | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-033** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **30 de 32** | Todos menos BUG-028 y BUG-033 |
+| ✅ **Resueltos** | **32 de 34** | Todos menos BUG-028 y BUG-033 |
 
-> **Aritmética:** **32 bugs catalogados = 30 resueltos · 2 abiertos · 0 parciales.**
+> **Aritmética:** **34 bugs catalogados = 32 resueltos · 2 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
 >
 > **Los abiertos (BUG-028 y BUG-033) no son fallos de funcionamiento: son capas de UI**
@@ -210,6 +210,90 @@ servidor no reinicia nada: sería un botón muerto).
 **Verificación:** `check-game-dom.mjs space` → ✅ 32/32 sin ausencias · protocolo real del
 juego completo (`MATCH_WAITING → MATCH_START → MATCH_LIVE → RIVAL_TICK`) · el SDK entrega
 `onMatchReady → onMatchLive`.
+
+---
+
+### 🔴 BUG-034 · Sky Runner 3D no existía: su `index.html` estaba VACÍO (0 bytes)
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (el juego era completamente inaccesible) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/hub/public/games/sky/index.html` (0 bytes → 2 269 bytes) |
+
+**Síntoma reportado:** *"Sky Runner 3D, dale, arréglame este juego, así mismo está, muchos bugs, todo"*.
+
+**Hallazgo:** el cuarto juego anunciado en el Hub **no tenía página**. El archivo
+`index.html` pesaba **0 bytes**, así que aunque el motor estaba completo y bien escrito
+(`js/game.js` 295 L, `js/renderer.js` 198 L, `js/prng.js` 68 L, `js/audio.js` 115 L) y
+`js/game.js` **ya llamaba a `PlayWin.init()`**, **nada se cargaba nunca**.
+
+**Detalle que condicionaba el arreglo:** el juego es **modular con ES Modules** (`script.js`
+hace `import './js/game.js'`), así que necesitaba `type="module"`. Cargarlo de cualquier otra
+forma habría fallado con un error de sintaxis.
+
+**Arreglo aplicado — reconstruida la página completa:**
+
+| Elemento | Por qué |
+| :--- | :--- |
+| `<canvas id="game-canvas">` | El motor lo busca con ese id exacto al cargar el módulo |
+| `.mobile-controls-layer` con `#btn-touch-left/right/jump` | **Las clases ya existían en `style.css` pero ningún HTML las usaba**: el juego era injugable en móvil |
+| `<script type="module" src="script.js">` | Obligatorio: el juego usa `import` |
+| Los 4 scripts del SDK, en orden | El puente debe existir antes de que el módulo llame a `PlayWin.init()` |
+
+**Verificación:** `check-sky-modules.mjs` ✅ (los 3 `import` resuelven y cada símbolo
+importado existe de verdad como export) · `check-sky-served.mjs` ✅ (los 7 ficheros se sirven
+por HTTP 200 y el orden de carga es correcto) · el protocolo real funciona
+(`MATCH_WAITING → MATCH_START → MATCH_LIVE → RIVAL_TICK`).
+
+---
+
+### 🔴 BUG-035 · Sky Runner: la pista tiene 7 carriles pero el motor usaba 9 posiciones
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (el jugador moría sin haber hecho nada malo) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/hub/public/games/sky/js/game.js` (3 puntos de cálculo) |
+
+**Cómo se encontró:** ejecutando la lógica determinista fuera del navegador
+([test-sky-determinism.mjs](scripts/test-sky-determinism.mjs)) y comparando la geometría del
+renderer con la del motor:
+
+| Fuente | Fórmula | Resultado |
+| :--- | :--- | :--- |
+| **Renderer** (dibuja la pista) | `project(i - 3.5, …)` para 7 carriles | la pista abarca **x ∈ [-3.5, 3.5]** |
+| **Motor** (limita el movimiento) | `Clamp(x, -4.2, 4.2)` | **x ∈ [-4.2, 4.2]** ← más ancho que la pista |
+| **Motor** (calcula el carril) | `Math.round(x + 3)` | devuelve **-1 … 7** ← los válidos son 0…6 |
+
+**Consecuencia:** en los extremos, `row[-1]` y `row[7]` son `undefined`, el juego considera
+que el jugador **no está sobre la pista** y lo hace caer. Medido: **29 de 169 posiciones de
+movimiento (17 %) provocaban una caída injusta**.
+
+**Arreglo aplicado — una sola fuente de verdad para la geometría:**
+
+```javascript
+const CARRILES = 7;
+
+/** Centro del carril ocupado por `x`, siempre dentro de 0..6. */
+function carrilDe(x) {
+  const col = Math.floor(x + CARRILES / 2);
+  return Math.min(CARRILES - 1, Math.max(0, col));
+}
+
+/** Límite de movimiento: mantiene al jugador sobre la pista, nunca al borde. */
+const LIMITE_X = CARRILES / 2 - 0.1;   // 3.4
+```
+
+* El límite de movimiento pasa de ±4.2 (inventado) a ±3.4 (**derivado del ancho real**).
+* Los **3 puntos** de cálculo de carril usan ya `carrilDe(x)`, que **nunca** devuelve un
+  índice fuera de rango.
+* `Math.floor` respeta las bandas que dibuja el renderer.
+
+**Verificación:** `test:sky` ✅ — recorridas **137 posiciones** de todo el rango: **0 fuera de
+la pista** y **los 7 carriles alcanzables**. Además se valida que el PRNG y el generador de
+pista son deterministas (misma semilla → mismo circuito), condición indispensable para que un
+duelo 1v1 sea justo.
 
 ---
 

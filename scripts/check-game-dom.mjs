@@ -75,4 +75,6 @@ for (const id of ['screen_gameover', 'pw-screen-result']) {
 
 const todoOk = faltanReales.length === 0 && canvas;
 console.log(`\n  ${todoOk ? '✅ El HTML cubre el contrato del motor' : '❌ Faltan elementos'}\n`);
-process.exit(todoOk ? 0 : 1);
+// Marcar el código sin forzar process.exit(): cerrar a lo bruto con descriptores
+// abiertos provoca un fallo de libuv en Windows.
+process.exitCode = todoOk ? 0 : 1;

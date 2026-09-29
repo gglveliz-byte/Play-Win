@@ -230,6 +230,50 @@ servidor de duelos está en línea.
 
 ---
 
+## 🎮 Los 4 juegos y su estado
+
+| Juego | Carpeta | Carga | Estado |
+| :--- | :--- | :--- | :--- |
+| **Speed Horizon 3D** | `carreras/` | scripts clásicos | ✅ Funciona · UI del motor incompleta (BUG-033, no bloquea) |
+| **Bati Vuelo 1v1** | `flapy-flapy/` | scripts clásicos | ✅ Funciona |
+| **Fuerza Espacial** | `space/` | scripts clásicos | ✅ Funciona · pantallas reconstruidas (BUG-032) |
+| **Sky Runner 3D** | `sky/` | **ES Modules** | ✅ Funciona · página y carriles reconstruidos (BUG-034, BUG-035) |
+
+> ⚠️ **`sky` es modular:** usa `import`, así que **debe** cargarse con
+> `<script type="module" src="script.js"></script>`. Cargarlo como script clásico
+> da un error de sintaxis y el juego no arranca.
+
+---
+
+## 🔍 Comprobadores (sin abrir el navegador)
+
+Antes de dar por bueno un cambio, estos comandos dicen qué está roto y dónde:
+
+| Comando | Qué responde |
+| :--- | :--- |
+| `npm run check:sdk` | ¿El SDK servido está sincronizado y con la versión correcta? |
+| `npm run check:dom <juego>` | ¿El HTML define todos los elementos que el motor busca por id? |
+| `npm run check:sky` | ¿Los módulos de Sky Runner resuelven y se sirven? |
+| `npm run test:sky` | ¿El PRNG es determinista y la pista siempre es jugable? |
+| `npm run test:sdk` | ¿El SDK entrega `onMatchLive` al juego? (simulador sin navegador) |
+| `npm run test:probe` | ¿El servidor completa el ciclo y reparte ticks? |
+
+**Ejemplos:**
+
+```powershell
+node scripts/check-game-dom.mjs space      # contrato del motor
+node scripts/check-sky-modules.mjs         # imports de Sky Runner
+node scripts/check-sky-served.mjs          # ficheros servidos por el Hub
+node scripts/watch-match-progress.mjs      # ¿la partida envía telemetría?
+node scripts/check-live-match.mjs space    # HTML servido + sala en vivo
+```
+
+> 💡 **El fallo más difícil de ver es un elemento ausente.** Si el motor busca
+> `getElementById('screen_gameover')` y no existe, no lanza ningún error: simplemente
+> no pasa nada, y el jugador se queda atascado. `check:dom` existe por eso.
+
+---
+
 ## 🛑 Parar los servidores
 
 ### Los dos comandos, listos para pegar

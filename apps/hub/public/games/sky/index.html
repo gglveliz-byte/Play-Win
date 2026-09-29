@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Play Win - Sky Runner 3D</title>
+
+  <!-- Tipografía Oficial Inter & Orbitron -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+
+  <!-- SDK Universal Play Win & Estilos del Juego -->
+  <link rel="stylesheet" href="/game-sdk/playwin-bridge.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-wrapper">
+    <!-- Lienzo 3D: el motor lo busca como #game-canvas -->
+    <canvas id="game-canvas" width="1280" height="720"></canvas>
+
+    <!-- Controles táctiles. Las clases ya existían en style.css pero ningún
+         archivo HTML las usaba: el juego era injugable en móvil. -->
+    <div class="mobile-controls-layer">
+      <div class="steer-left-zone">
+        <button id="btn-touch-left" class="touch-btn steer-btn" title="Girar a la izquierda" aria-label="Girar a la izquierda">◀</button>
+        <button id="btn-touch-right" class="touch-btn steer-btn" title="Girar a la derecha" aria-label="Girar a la derecha">▶</button>
+      </div>
+      <div class="steer-right-zone">
+        <button id="btn-touch-jump" class="touch-btn jump-btn" title="Saltar" aria-label="Saltar">SALTAR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       ORDEN DE CARGA OBLIGATORIO
+       Los 3 módulos de soporte del SDK deben cargarse ANTES que el
+       puente, y el puente antes que el juego (el puente es síncrono;
+       el juego es un módulo y se ejecuta después).
+       ============================================================ -->
+  <script src="/game-sdk/playwin-bridge-ui.js?v=6"></script>
+  <script src="/game-sdk/playwin-bridge-status.js?v=6"></script>
+  <script src="/game-sdk/playwin-bridge-connection.js?v=6"></script>
+  <script src="/game-sdk/playwin-bridge.js?v=6"></script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>
