@@ -133,13 +133,13 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ · ~~BUG-036~~ ✅ · ~~BUG-037~~ ✅ · ~~BUG-039~~ ✅ · ~~BUG-040~~ ✅ · ~~BUG-041~~ ✅ · ~~BUG-042~~ ✅ · ~~BUG-043~~ ✅ · ~~BUG-044~~ ✅ |
+| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ · ~~BUG-036~~ ✅ · ~~BUG-037~~ ✅ · ~~BUG-039~~ ✅ · ~~BUG-040~~ ✅ · ~~BUG-041~~ ✅ · ~~BUG-042~~ ✅ · ~~BUG-043~~ ✅ · ~~BUG-044~~ ✅ · ~~BUG-045~~ ✅ |
 | 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
 | 🟡 **Medio** | **2 abiertos** (BUG-028 · BUG-033) | ~~BUG-038~~ ✅ | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-033** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **41 de 43** | Todos menos BUG-028 y BUG-033 |
+| ✅ **Resueltos** | **42 de 44** | Todos menos BUG-028 y BUG-033 |
 
-> **Aritmética:** **43 bugs catalogados = 41 resueltos · 2 abiertos · 0 parciales.**
+> **Aritmética:** **44 bugs catalogados = 42 resueltos · 2 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
 >
 > **Los abiertos (BUG-028 y BUG-033) no son fallos de funcionamiento: son capas de UI**
@@ -210,6 +210,54 @@ servidor no reinicia nada: sería un botón muerto).
 **Verificación:** `check-game-dom.mjs space` → ✅ 32/32 sin ausencias · protocolo real del
 juego completo (`MATCH_WAITING → MATCH_START → MATCH_LIVE → RIVAL_TICK`) · el SDK entrega
 `onMatchReady → onMatchLive`.
+
+---
+
+### 🔴 BUG-045 · El canvas quedó completamente en negro (fallo introducido al extraer la física)
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (el juego no mostraba nada) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/hub/public/games/sky/js/game.js` · `updatePhysics` |
+
+**Síntoma reportado:** *"verga cómo se quedó"* — pantalla completamente negra, sólo el HUD del
+SDK y los botones. El escenario no se dibujaba.
+
+**Causa raíz:** al extraer la física a `physics.js`, `updatePhysics` copiaba el estado a un
+objeto, se lo pasaba y lo leía de vuelta:
+
+```javascript
+const estado = { gameState, x, y, z, … };
+pasoDeFisica(estado, { … });
+({ x, y, z, …, gameState } = estado);   // ← depende de que el campo esté en la copia
+```
+
+La lectura de vuelta depende por completo de que cada campo esté en la copia. **Cualquier campo
+ausente vuelve como `undefined`**, y con `gameState` en `undefined` **ninguna rama de la
+simulación se ejecuta**: no se avanza, no se puntúa, no se dibuja. El canvas queda negro y **no
+aparece ningún error**.
+
+**Arreglo (tres capas para que no se repita):**
+
+1. **Todos los campos se declaran uno a uno** en el objeto de estado, sin depender del atajo de
+   propiedades.
+2. **La lectura de vuelta es explícita**, campo por campo.
+3. **`gameState` se protege:** `gameState = estado.gameState ?? gameState`. Si el campo faltara,
+   se conserva el valor anterior en lugar de dejar el juego mudo.
+
+**La prueba que lo habría cazado** — `test-sky-physics` incluye ahora **16 comprobaciones de
+integridad del estado**: recorre los 15 campos y verifica que ninguno se pierde al pasar por la
+física, con una comprobación específica de que `gameState` nunca queda indefinido.
+
+**Y `test-sky-render` (nuevo):** ejecuta la cadena de dibujo **real** con un canvas falso que
+registra lo pintado, así un canvas vacío se detecta **sin abrir el navegador**:
+
+```
+antes de la partida:  581 rectángulos · 258 trazos · 2 gradientes
+durante la partida:   269 rectángulos · 102 trazos
+la pista existe hasta la fila que se dibuja, en z = 0, 40, 300 y 3000
+```
 
 ---
 
