@@ -133,13 +133,13 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ · ~~BUG-036~~ ✅ · ~~BUG-037~~ ✅ |
+| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ · ~~BUG-036~~ ✅ · ~~BUG-037~~ ✅ · ~~BUG-039~~ ✅ · ~~BUG-040~~ ✅ · ~~BUG-041~~ ✅ |
 | 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
 | 🟡 **Medio** | **2 abiertos** (BUG-028 · BUG-033) | ~~BUG-038~~ ✅ | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-033** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **35 de 37** | Todos menos BUG-028 y BUG-033 |
+| ✅ **Resueltos** | **38 de 40** | Todos menos BUG-028 y BUG-033 |
 
-> **Aritmética:** **37 bugs catalogados = 35 resueltos · 2 abiertos · 0 parciales.**
+> **Aritmética:** **40 bugs catalogados = 38 resueltos · 2 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
 >
 > **Los abiertos (BUG-028 y BUG-033) no son fallos de funcionamiento: son capas de UI**
@@ -210,6 +210,103 @@ servidor no reinicia nada: sería un botón muerto).
 **Verificación:** `check-game-dom.mjs space` → ✅ 32/32 sin ausencias · protocolo real del
 juego completo (`MATCH_WAITING → MATCH_START → MATCH_LIVE → RIVAL_TICK`) · el SDK entrega
 `onMatchReady → onMatchLive`.
+
+---
+
+### 🔴 BUG-039 · Sky Runner: el rival fantasma desaparecía si iba detrás
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Alto** (el jugador no tenía referencia visual de su rival) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/hub/public/games/sky/js/renderer.js` · `drawRivalGhost` |
+
+**Síntoma reportado:** *"la sombrita azul del contrincante no sale"*.
+
+**Causa raíz:**
+
+```javascript
+const dz = (rival.z - playerZ) + cameraInFront;
+if (dz <= 0.4 || dz >= 44) return;   // ← si el rival se acercaba, DESAPARECÍA
+```
+
+Con los dos jugadores al mismo nivel (`dz = 3`) se dibujaba, pero en cuanto el rival se
+quedaba **un poco por detrás** —tu captura mostraba 61 contra 41— la proyección daba
+`dz = -17`: el rival quedaba **detrás de la cámara** y la función salía sin pintar nada.
+Tampoco se veía la sombra azul que mencionabas.
+
+**Regla confirmada contigo:** en este juego **los dos van al mismo nivel** y el fantasma
+debe verse **superpuesto**, distinguible por su **transparencia**, no escondiéndolo.
+
+**Arreglo:**
+
+* El rival se dibuja a cualquier profundidad cercana (`dz > 0.05`), **también si va detrás
+  o al mismo nivel**.
+* Su opacidad **baja cuanto más cerca está**, para que los dos se distingan al solaparse.
+
+**Verificado:** con los dos al mismo nivel, el rival se proyecta en **(640, 607)**, el mismo
+punto que la bola del jugador: se ven superpuestos y ambos distinguibles.
+
+---
+
+### 🔴 BUG-040 · Sky Runner: la puntuación era la distancia, idéntica para los dos
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (hacía imposible que un duelo se decidiera) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/hub/public/games/sky/js/game.js` (tick al servidor) |
+
+**Síntoma reportado:** *"nadie gana, si es que va más adelante uno o más atrás otro no,
+porque si te fijas ambos tienen la misma distancia… la forma de perder es cayéndose al
+abismo, muy importante eso"*.
+
+**Causa raíz:** el motor enviaba `score: Math.floor(z)`, es decir **la distancia
+recorrida**. Pero en Sky Runner el avance **no depende del jugador**: es una función del
+tiempo (`z += Math.min(0.5, 0.2 + z / 5000)`). Dos jugadores que aguantan lo mismo recorren
+**exactamente la misma distancia**, así que el marcador mostraba el mismo número para los
+dos y **el duelo no podía decidirse nunca por puntuación**.
+
+Comprobado por simulación: dos jugadores iguales acababan en **17 209 con 0 m de
+diferencia**.
+
+> **Cada juego mide lo suyo.** En *Speed Horizon 3D* la puntuación **sí** es la distancia,
+> porque allí el avance depende del jugador y ese diseño es correcto. En *Sky Runner* el
+> avance es automático, así que puntuar distancia no distingue a nadie.
+
+**Arreglo:** la puntuación pasa a ser **el tiempo sobrevivido** (`pasosVivo / 60`), que es
+lo que de verdad mide la habilidad en un juego de supervivencia. Así:
+
+* **Gana quien no cae al abismo**, tal y como pediste.
+* Si los dos caen, gana quien **aguantó más tiempo**.
+
+**Verificado:** `test-sky-win-condition.mjs` comprueba que la pista es superable, que la
+puntuación refleja el tiempo y que la resolución del duelo es coherente.
+
+---
+
+### 🔴 BUG-041 · El servidor no limitaba la duración de un duelo: partidas eternas
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (la sala quedaba ocupada y no se registraba resultado) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/realtime-server/src/match-clock.js` (nuevo) · `rooms.js` |
+
+**Cómo se encontró:** al analizar la lógica de Sky Runner. Con la pista garantizando un paso
+practicable, **dos jugadores buenos pueden sobrevivir indefinidamente**. Y el servidor **no
+tenía ningún tope de duración**: sólo existía la ventana de reconexión de 15 s. Una partida
+así **no terminaba jamás**: la sala seguía ocupada, el emparejamiento no se liberaba y no se
+registraba ningún resultado.
+
+**Arreglo:** un reloj máximo por duelo (`MATCH_TIME_LIMIT_MS = 3 min`). Al agotarse se
+resuelve **por puntuación**, con la misma regla que cuando un jugador termina y el otro no
+aparece. El reloj se cancela al cerrar la sala para no dejar temporizadores vivos.
+
+**Extracción de paso:** `rooms.js` había crecido a 363 líneas (límite 350). Se separaron dos
+unidades coherentes: `join-queue.js` (entrada a la cola y reconexión) y `tick-handler.js`
+(ritmo de paquetes, validación de física y reenvío al rival). Ahora `rooms.js` queda en
+**273 líneas** y la gobernanza vuelve a **12/12**.
 
 ---
 

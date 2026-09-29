@@ -7,18 +7,18 @@ export const cameraInFront = 3;
 export const F = 0.7;
 
 /**
- * Posición horizontal de la cámara.
+ * La cámara va PEGADA al jugador en horizontal.
  *
- * El motor limita al jugador a x ∈ [-3.4, 3.4], pero la cámara se queda en el
- * centro del mundo: así los 7 carriles (que abarcan [-3.5, 3.5]) caben en
- * pantalla y se ve al jugador moverse de lado.
+ * Sky Runner 3D no es una carrera de distancia: es un juego de SUPERVIVENCIA.
+ * Los dos jugadores avanzan al mismo ritmo, así que lo único que decide el duelo
+ * es quién cae al abismo. Por eso la bola se dibuja siempre en el centro de la
+ * pantalla y lo que se desplaza es la pista al girar: el jugador ve moverse el
+ * mundo, no su propia bola de lado a lado.
  *
- * ANTES la cámara viajaba con el jugador: `project` recibía el mismo valor como
- * posición y como cámara, así que `px - camX` daba SIEMPRE 0 y la bola, su sombra
- * y el rival se dibujaban clavados en el centro horizontal de la pantalla.
- * El jugador se movía de verdad, pero en pantalla nada se movía.
+ * (En carreras la cámara es fija y el coche se desplaza; aquí es al revés, y es
+ * intencionado.)
  */
-export const cameraX = 0;
+export const cameraSigueAlJugador = true;
 
 export function initStars(numStars = 70) {
   const stars = [];
@@ -62,12 +62,10 @@ export function drawSkyAndStars(ctx, stars, width, height, playerZ) {
   ctx.fill();
 }
 
-export function drawTrack(ctx, trackManager, playerX, z, canvasWidth, canvasHeight, isPortrait) {
-  // `playerX` no interviene en la proyección: la cámara está FIJA en `cameraX`,
-  // así que la pista se ve siempre centrada y es el jugador quien se desplaza
-  // sobre ella. Antes este parámetro se usaba como cámara, lo que clavaba en el
-  // centro de la pantalla todo lo que se dibujaba después.
-  void playerX;
+export function drawTrack(ctx, trackManager, camX, z, canvasWidth, canvasHeight, isPortrait) {
+  // `camX` es la posición del JUGADOR: la cámara va pegada a él. Al girar, la
+  // pista se desplaza a los lados y la bola se queda centrada, que es como debe
+  // leerse un juego de supervivencia (ves moverse el mundo, no tu propia bola).
   const zInt = Math.floor(z);
   trackManager.ensureTrackUpTo(zInt + 42);
 
@@ -90,10 +88,10 @@ export function drawTrack(ctx, trackManager, playerX, z, canvasWidth, canvasHeig
     for (let j = 2; j--; ) {
       for (let i = 7; i--; ) {
         if (row[i]) {
-          const [ax, ay] = project(i - 3.5, 0, dz, canvasWidth, canvasHeight, isPortrait, cameraX, z);
-          const [bx, by] = project(i - 2.5, 0, dz, canvasWidth, canvasHeight, isPortrait, cameraX, z);
-          const [ex, ey] = project(i - 3.5, 0, dzNext, canvasWidth, canvasHeight, isPortrait, cameraX, z);
-          const [fx, fy] = project(i - 2.5, 0, dzNext, canvasWidth, canvasHeight, isPortrait, cameraX, z);
+          const [ax, ay] = project(i - 3.5, 0, dz, canvasWidth, canvasHeight, isPortrait, camX, z);
+          const [bx, by] = project(i - 2.5, 0, dz, canvasWidth, canvasHeight, isPortrait, camX, z);
+          const [ex, ey] = project(i - 3.5, 0, dzNext, canvasWidth, canvasHeight, isPortrait, camX, z);
+          const [fx, fy] = project(i - 2.5, 0, dzNext, canvasWidth, canvasHeight, isPortrait, camX, z);
 
           const isOdd = (r + i) & 1;
           if (j) {
@@ -130,6 +128,8 @@ export function drawTrack(ctx, trackManager, playerX, z, canvasWidth, canvasHeig
 export const RADIO_BOLA = 0.35;
 
 export function drawPlayerBall(ctx, x, y, z, canvasWidth, canvasHeight, isPortrait, isOverTrack) {
+  // Cámara pegada al jugador: su bola se dibuja centrada y la pista se desplaza.
+  const camX = x;
   // ------------------------------------------------------------------
   // SOMBRA PROYECTADA EN EL SUELO
   //
@@ -142,7 +142,7 @@ export function drawPlayerBall(ctx, x, y, z, canvasWidth, canvasHeight, isPortra
   // que queda en el punto exacto del carril sobre el que va el jugador.
   // ------------------------------------------------------------------
   if (isOverTrack) {
-    const [sx, sy, scale] = project(x, 0, cameraInFront, canvasWidth, canvasHeight, isPortrait, cameraX, z);
+    const [sx, sy, scale] = project(x, 0, cameraInFront, canvasWidth, canvasHeight, isPortrait, camX, z);
     const ancho = scale * 0.32;
     const alto = scale * 0.12;
     if (alto > 0.5) {
@@ -160,7 +160,7 @@ export function drawPlayerBall(ctx, x, y, z, canvasWidth, canvasHeight, isPortra
     }
   }
 
-  const [ballX, ballY, ballScale] = project(x, y + RADIO_BOLA, cameraInFront, canvasWidth, canvasHeight, isPortrait, cameraX, z);
+  const [ballX, ballY, ballScale] = project(x, y + RADIO_BOLA, cameraInFront, canvasWidth, canvasHeight, isPortrait, camX, z);
   const rBall = ballScale * 0.36;
 
   if (rBall > 1) {
@@ -184,13 +184,21 @@ export function drawRivalGhost(ctx, rival, playerX, playerZ, canvasWidth, canvas
   if (!rival.connected) return;
 
   const dz = (rival.z - playerZ) + cameraInFront;
-  if (dz <= 0.4 || dz >= 44) return;
+  // El rival se dibuja a CUALQUIER profundidad cercana, incluso si va al mismo
+  // nivel que el jugador. Antes se descartaba con `dz <= 0.4`, así que en cuanto
+  // el rival se acercaba un poco DESAPARECÍA de la pantalla, y ese era el motivo
+  // de que la "sombrita azul" no se viera nunca.
+  if (dz <= 0.05 || dz >= 44) return;
 
+  // Como los dos van al mismo nivel, se solapan en el centro. Cuanto más cerca
+  // está el rival, más transparente se dibuja: así siempre se distinguen los dos
+  // en lugar de taparse.
+  const cercania = Math.max(0, 1 - Math.abs(dz - cameraInFront) / 6);
   ctx.save();
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 0.85 - cercania * 0.45;
 
   if (rival.isAlive) {
-    const [rsx, rsy, rscale] = project(rival.x, 0, dz, canvasWidth, canvasHeight, isPortrait, cameraX, playerZ);
+    const [rsx, rsy, rscale] = project(rival.x, 0, dz, canvasWidth, canvasHeight, isPortrait, playerX, playerZ);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     ctx.beginPath();
     ctx.ellipse(rsx, rsy, rscale * 0.32, rscale * 0.12, 0, 0, Math.PI * 2);
@@ -198,7 +206,7 @@ export function drawRivalGhost(ctx, rival, playerX, playerZ, canvasWidth, canvas
   }
 
   const rivalY = (rival.isAlive ? 0 : -2.0) + RADIO_BOLA;
-  const [ballX, ballY, ballScale] = project(rival.x, rivalY, dz, canvasWidth, canvasHeight, isPortrait, cameraX, playerZ);
+  const [ballX, ballY, ballScale] = project(rival.x, rivalY, dz, canvasWidth, canvasHeight, isPortrait, playerX, playerZ);
   const rBall = ballScale * 0.36;
 
   if (rBall > 1) {

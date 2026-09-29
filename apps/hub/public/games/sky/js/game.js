@@ -61,6 +61,9 @@ const Lerp = (p, a, b) => a + Clamp(p, 0, 1) * (b - a);
 // Semilla de la partida en curso: la fija el servidor en `onMatchReady` y se
 // conserva para poder reiniciar el escenario al terminar el duelo.
 let semillaActual = 123456;
+// Tiempo de supervivencia: es lo que se puntúa (no la distancia, que es igual para los dos).
+let pasosVivo = 0;
+let puntuacion = 0;
 
 const STATE_IDLE = 'IDLE';
 const STATE_READY = 'READY';
@@ -104,6 +107,8 @@ function resetGame(seed = 123456) {
 }
 
 function startGame() {
+  pasosVivo = 0;
+  puntuacion = 0;
   audioSys.resume();
   audioSys.playStart();
   gameState = STATE_PLAYING;
@@ -196,6 +201,16 @@ function updatePhysics() {
   }
 
   if (gameState === STATE_PLAYING) {
+    // Sky Runner es un juego de SUPERVIVENCIA: los dos jugadores avanzan al mismo
+    // ritmo, así que la puntuación NO puede ser la distancia (sería idéntica para
+    // los dos y nadie podría ganar nunca). Lo que se puntúa es el TIEMPO que
+    // aguantas sin caer al abismo: quien cae primero pierde.
+    //
+    // (En carreras la puntuación sí es la distancia: allí el avance depende del
+    // jugador. Cada juego mide lo suyo.)
+    pasosVivo++;
+    puntuacion = Math.floor(pasosVivo / 60);   // el bucle va a 60 pasos por segundo
+
     if (keyLeft) steerInput = Lerp(0.28, steerInput, -1);
     else if (keyRight) steerInput = Lerp(0.28, steerInput, 1);
     else if (touchDriving) steerInput = Lerp(0.35, steerInput, touchSteer);
@@ -335,7 +350,7 @@ window.addEventListener('DOMContentLoaded', () => {
       window.PlayWin.sendTick({
         x,
         y: z,
-        score: Math.floor(z),
+        score: puntuacion,
         isAlive: true,
       });
     }

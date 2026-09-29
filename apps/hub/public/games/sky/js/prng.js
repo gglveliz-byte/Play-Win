@@ -29,27 +29,42 @@ export class TrackManager {
 
   ensureTrackUpTo(targetRow) {
     for (let i = this.trackRows.length; i <= targetRow; ) {
-      const rand1 = this.prng();
-      const rand2 = this.prng();
-      const rand3 = this.prng();
-      const rand4 = this.prng();
-
-      if (this.trackGap < -8 && rand1 < Math.min(0.2, i / 10000)) {
-        this.trackGap = 2 + Math.min(4, i / 400);
+      // ------------------------------------------------------------------
+      // LA BANDA DE HUECOS SE MUEVE SOLA, fila a fila.
+      //
+      // Antes se quedaba quieta y sólo cambiaba de sitio un 10% de las veces, así
+      // que el hueco se repetía en el mismo carril durante cientos de filas. Eso
+      // hacía dos cosas mal: creaba paredes IMPOSIBLES de saltar (cuando la banda
+      // tapaba todos los carriles) y, tras garantizar un paso, dejaba la pista
+      // tan fácil que nadie caía nunca.
+      //
+      // Ahora la banda se desplaza un carril de vez en cuando y se ensancha con
+      // la distancia. El paso siempre existe, pero hay que SEGUIRLO: mantenerse
+      // vivo exige moverse, y ahí está la habilidad que decide el duelo.
+      // ------------------------------------------------------------------
+      if (this.prng() < 0.22) {
+        this.trackSx = Math.max(0, Math.min(7 - this.trackSw, this.trackSx + (this.prng() < 0.5 ? -1 : 1)));
       }
-      if (rand2 < 0.1) {
-        this.trackSw = 2 + Math.floor(rand3 * 3);
-        this.trackSx = Math.max(0, Math.min(7 - this.trackSw, this.trackSx - 2 + Math.floor(rand4 * 5)));
+      if (this.prng() < 0.04) {
+        // La banda se ensancha MUY despacio: 2 carriles durante el primer minuto
+        // largo y hasta 4 sólo en partidas muy largas. Con `i / 900` llegaba a 4
+        // carriles en apenas un minuto y la pista se volvía tan estrecha que
+        // nadie podía fallar, así que el duelo nunca se decidía.
+        this.trackSw = 2 + (i > 3600 ? 1 : 0) + (i > 9000 ? 1 : 0);
       }
-      this.trackGap--;
 
       const p = [];
       for (let j = 7; j--; ) {
         const randTile = this.prng();
-        p[j] = (i < 35)
-          | (randTile > 0.9)
-          | (this.trackGap < 0 && this.trackSx <= j && j < this.trackSx + this.trackSw && this.prng() > Math.min(0.2, i / 10000));
+        const dentroDeLaBanda = this.trackSx <= j && j < this.trackSx + this.trackSw;
+        p[j] = (i < 35) || (randTile > 0.9) || dentroDeLaBanda;
       }
+
+      // PASO GARANTIZADO: nunca una fila sin ningún carril sólido. Sin esto
+      // aparecían paredes infranqueables y todo el mundo caía en el mismo metro,
+      // así que el duelo no podía decidirse por habilidad.
+      if (!p.some(Boolean)) p[this.trackSx % 7] = true;
+
       this.trackRows[i++] = p;
     }
   }

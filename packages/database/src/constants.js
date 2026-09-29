@@ -154,3 +154,17 @@ export const RECONNECT_GRACE_MS = 15000;
 
 /** Espera antes de emparejar contra un rival de división (Ghost Bot), en ms. */
 export const GHOST_MATCH_TIMEOUT_MS = 3500;
+
+/**
+ * Duración máxima de un duelo, en milisegundos.
+ *
+ * Sin este tope una partida podía no terminar NUNCA. Ocurre de verdad: en Sky
+ * Runner los dos jugadores avanzan al mismo ritmo y la pista siempre ofrece un
+ * paso practicable, así que dos jugadores buenos pueden sobrevivir
+ * indefinidamente. El duelo se quedaba abierto, no se registraba resultado y la
+ * sala seguía ocupada.
+ *
+ * Al agotarse el tiempo gana quien más puntuación tenga (en carreras, más
+ * distancia; en Sky Runner, más tiempo sobrevivido).
+ */
+export const MATCH_TIME_LIMIT_MS = 180000; // 3 minutos

@@ -1,10 +1,12 @@
 import { matchService } from '@playwin/database';
-import { verifyMatchTicket, validateTickPhysics, detectCollusion, validatePacketRate, isSelfMatchAllowed } from './anticheat.js';
+import { joinQueue } from './join-queue.js';
 import { ReconnectManager } from './match-reconnect.js';
 import { createDuelRoom, createGhostRoom } from './room-factory.js';
 import { buildStatusSnapshot } from './room-status.js';
 import { buildGhostCallbacks } from './ghost-match.js';
 import { removeFromQueues, handleInMatchDisconnect } from './disconnect-handler.js';
+import { startMatchClock, cancelMatchClock, resumenPorTiempo, MOTIVO_TIEMPO_AGOTADO } from './match-clock.js';
+import { handlePlayerTick as procesarTick } from './tick-handler.js';
 
 /**
  * Gestor de salas 1v1 y árbitro en tiempo real con Anti-Cheat (< 350 líneas)
@@ -27,117 +29,27 @@ export class RoomManager {
     this.ghostBotDelayMs = Number(options.ghostBotDelayMs) || 3500;
   }
 
+  /**
+   * Mete al jugador en la cola o lo reengancha a su partida.
+   * La lógica completa vive en `join-queue.js` (límite de tamaño de archivo).
+   */
   joinQueue(rawPlayer, socket, clientIp = '127.0.0.1') {
-    const player = { ...rawPlayer };
-    if (!player.token) return this._send(socket, { event: 'SECURITY_ERROR', message: 'Acceso denegado: Inicia sesión.' });
-    const verified = verifyMatchTicket(player.token);
-    if (!verified) return this._send(socket, { event: 'SECURITY_ERROR', message: 'Token de partida no válido o expirado.' });
-
-    player.id = verified.sub;
-    player.username = verified.username;
-    player.avatar = verified.avatar || player.avatar;
-    player.gameId = verified.gameId || player.gameId;
-    const gameId = player.gameId || 'carreras';
-
-    // 0. Reconexión en ventana de gracia (15s) o vinculación a sala activa existente
-    let activeRoom = null;
-    let isPlayerA = true;
-
-    if (this.reconnectManager.isPending(player.id) || this.reconnectManager.isPending(player.username)) {
-      const pending = this.reconnectManager.cancel(player.id) || this.reconnectManager.cancel(player.username);
-      activeRoom = pending ? this.rooms.get(pending.roomId) : null;
-    }
-
-    if (!activeRoom) {
-      for (const [, r] of this.rooms.entries()) {
-        if (r.status === 'COUNTDOWN' || r.status === 'PLAYING') {
-          const matchA = r.playerA?.id === player.id || r.playerA?.username?.toLowerCase() === player.username?.toLowerCase();
-          const matchB = r.playerB?.id === player.id || r.playerB?.username?.toLowerCase() === player.username?.toLowerCase();
-          if (matchA || matchB) {
-            activeRoom = r;
-            isPlayerA = matchA;
-            this.reconnectManager.cancel(player.id);
-            this.reconnectManager.cancel(player.username);
-            break;
-          }
-        }
-      }
-    } else {
-      isPlayerA = activeRoom.playerA.id === player.id || activeRoom.playerA.username?.toLowerCase() === player.username?.toLowerCase();
-    }
-
-    if (activeRoom && (activeRoom.status === 'COUNTDOWN' || activeRoom.status === 'PLAYING')) {
-      const [rec, opp] = isPlayerA ? [activeRoom.playerA, activeRoom.playerB] : [activeRoom.playerB, activeRoom.playerA];
-      rec.socket = socket;
-      this.socketToRoom.set(socket, activeRoom.roomId);
-      if (activeRoom.isGhostMatch && activeRoom.ghostSimulation) activeRoom.ghostSimulation.resume();
-      this._send(socket, {
-        event: 'MATCH_RESUME', roomId: activeRoom.roomId, seed: activeRoom.seed, status: activeRoom.status,
-        role: isPlayerA ? 'PLAYER_A' : 'PLAYER_B',
-        player: { id: rec.id, username: rec.username, avatar: rec.avatar, score: rec.score },
-        opponent: { username: opp.username, avatar: opp.avatar, rank: opp.rank, score: opp.score },
-      });
-      if (opp.socket) this._send(opp.socket, { event: 'RIVAL_RECONNECTED', message: `${rec.username} se ha reconectado.` });
-      return;
-    }
-
-    if (!this.waitingQueues.has(gameId)) this.waitingQueues.set(gameId, []);
-    const queue = this.waitingQueues.get(gameId);
-    for (let i = queue.length - 1; i >= 0; i--) {
-      if (!queue[i].socket || queue[i].socket.readyState !== 1) {
-        if (queue[i].matchTimer) clearTimeout(queue[i].matchTimer);
-        queue.splice(i, 1);
-      }
-    }
-
-    // 0. Desvincular de sala previa si estuviera en rematch rápido
-    if (this.socketToRoom.has(socket)) {
-      const oldId = this.socketToRoom.get(socket);
-      this.socketToRoom.delete(socket);
-      const oldR = this.rooms.get(oldId);
-      if (oldR && oldR.status !== 'FINISHED') {
-        oldR.status = 'FINISHED';
-        if (oldR.ghostSimulation) oldR.ghostSimulation.stop();
-      }
-    }
-
-    // Evitar socket duplicado en cola sin reiniciar su temporizador si ya está en espera
-    const existingIdx = queue.findIndex((e) => e.socket === socket);
-    if (existingIdx !== -1) return;
-
-    // Buscar oponente. El emparejamiento contra uno mismo requiere la bandera
-    // explícita ALLOW_SELF_MATCH (antes dependía de NODE_ENV, lo que hacía el
-    // comportamiento implícito e intraducible a pruebas).
-    const isDev = isSelfMatchAllowed();
-    const opponentIdx = queue.findIndex(
-      (entry) => isDev ? entry.socket !== socket : (entry.player.id !== player.id && entry.player.username !== player.username)
+    joinQueue(
+      {
+        rooms: this.rooms,
+        socketToRoom: this.socketToRoom,
+        waitingQueues: this.waitingQueues,
+        reconnectManager: this.reconnectManager,
+        ghostBotsEnabled: this.ghostBotsEnabled,
+        ghostBotDelayMs: this.ghostBotDelayMs,
+        send: this._send.bind(this),
+        createDuelRoom: (gameId, opponent, entry) => this._createDuelRoom(gameId, opponent, entry),
+        startGhostMatch: (gameId, entry) => this._startGhostMatch(gameId, entry),
+      },
+      rawPlayer,
+      socket,
+      clientIp
     );
-
-    if (opponentIdx !== -1) {
-      const opponent = queue.splice(opponentIdx, 1)[0];
-      if (opponent.matchTimer) clearTimeout(opponent.matchTimer);
-      const collusion = detectCollusion(opponent, { player, socket, ip: clientIp });
-      if (collusion.isCollusion) {
-        return this._send(socket, { event: 'SECURITY_WARNING', message: 'Emparejamiento bloqueado por colusión.' });
-      }
-      if (opponent.player.id === player.id) player.username = `${player.username} (Tab 2)`;
-      this._createDuelRoom(gameId, opponent, { player, socket, ip: clientIp });
-    } else {
-      // Sin rival humano todavía: se espera antes de recurrir a un bot.
-      // Si los bots están desactivados, el jugador queda en cola indefinidamente
-      // (comportamiento deseado para probar PvP entre personas reales).
-      const queueEntry = { player, socket, ip: clientIp, matchTimer: null };
-      if (this.ghostBotsEnabled) {
-        queueEntry.matchTimer = setTimeout(() => {
-          const q = this.waitingQueues.get(gameId);
-          if (!q) return;
-          const idx = q.indexOf(queueEntry);
-          if (idx !== -1) { q.splice(idx, 1); this._startGhostMatch(gameId, queueEntry); }
-        }, this.ghostBotDelayMs);
-      }
-      queue.push(queueEntry);
-      this._send(socket, { event: 'MATCH_WAITING', gameId, message: 'Buscando contrincante en tu división...' });
-    }
   }
 
   async _createDuelRoom(gameId, entryA, entryB) {
@@ -145,6 +57,10 @@ export class RoomManager {
     this.rooms.set(room.roomId, room);
     this.socketToRoom.set(entryA.socket, room.roomId);
     this.socketToRoom.set(entryB.socket, room.roomId);
+    // Reloj máximo: evita que un duelo entre dos jugadores que sobreviven se
+    // quede abierto para siempre sin resultado.
+    // Tope de duración: sin él, dos jugadores que sobreviven dejarían la sala abierta sin resultado.
+    startMatchClock(room, (sala, motivo) => this._resolveScoreWinner(sala, motivo), (id) => this.rooms.get(id));
   }
 
   async _startGhostMatch(gameId, entry) {
@@ -163,6 +79,8 @@ export class RoomManager {
     targetRoomId = roomId;
     this.rooms.set(roomId, room);
     this.socketToRoom.set(entry.socket, roomId);
+    // Tope de duración: sin él, dos jugadores que sobreviven dejarían la sala abierta sin resultado.
+    startMatchClock(room, (sala, motivo) => this._resolveScoreWinner(sala, motivo), (id) => this.rooms.get(id));
   }
 
   /**
@@ -174,57 +92,34 @@ export class RoomManager {
     return buildStatusSnapshot(this);
   }
 
+  /** Delegado en tick-handler.js: ritmo, física y reenvío al rival. */
   handlePlayerTick(socket, tickData) {
-    const roomId = this.socketToRoom.get(socket);
-    if (!roomId) return;
-    const room = this.rooms.get(roomId);
-    if (!room || room.status !== 'PLAYING') return;
-
-    const isPlayerA = socket === room.playerA.socket;
-    const curPlayer = isPlayerA ? room.playerA : room.playerB;
-    const targetSocket = isPlayerA ? room.playerB?.socket : room.playerA?.socket;
-
-    const rateCheck = validatePacketRate(curPlayer.tickHistory, Date.now());
-    if (!rateCheck.valid) {
-      this.handlePlayerDisqualification(socket, rateCheck.reason);
-      return;
-    }
-    curPlayer.tickHistory = rateCheck.history;
-
-    const currentTick = { timestamp: Date.now(), x: tickData.x || 0, y: tickData.y || 0, score: tickData.score || 0 };
-    const physicsCheck = validateTickPhysics(room.gameId, curPlayer.lastTick, currentTick, room.liveAt || room.startedAt);
-    if (!physicsCheck.valid) {
-      curPlayer.cheatStrikes = (curPlayer.cheatStrikes || 0) + 1;
-      if (physicsCheck.severity === 'HIGH' || curPlayer.cheatStrikes >= 2) {
-        this.handlePlayerDisqualification(socket, physicsCheck.reason);
-        return;
-      }
-    } else if (curPlayer.cheatStrikes > 0) {
-      curPlayer.cheatStrikes = Math.max(0, curPlayer.cheatStrikes - 0.5);
-    }
-
-    curPlayer.score = currentTick.score;
-    curPlayer.lastTick = currentTick;
-
-    if (targetSocket) {
-      this._send(targetSocket, {
-        event: 'RIVAL_TICK',
-        x: currentTick.x,
-        y: currentTick.y,
-        score: currentTick.score,
-        isAlive: tickData.isAlive ?? true,
-      });
-    }
+    procesarTick(
+      {
+        socketToRoom: this.socketToRoom,
+        rooms: this.rooms,
+        send: this._send.bind(this),
+        descalificar: (s, motivo) => this.handlePlayerDisqualification(s, motivo),
+      },
+      socket,
+      tickData
+    );
   }
 
-  _resolveScoreWinner(room) {
+  _resolveScoreWinner(room, motivo = 'HIGHER_SCORE') {
     if (room.finishTimer) clearTimeout(room.finishTimer);
+    cancelMatchClock(room);
     room.status = 'FINISHED';
     if (room.ghostSimulation) room.ghostSimulation.stop();
     const p1 = room.playerA.score || 0, p2 = room.playerB.score || 0;
     const winner = p1 >= p2 ? room.playerA : room.playerB;
     const loser = winner === room.playerA ? room.playerB : room.playerA;
-    this._finishMatch(room, winner, loser, 'HIGHER_SCORE', p1 === p2 ? `Empate a ${p1}m.` : `${winner.username} ganó con ${winner.score}m.`, 100, 20);
+    const resumen = p1 === p2
+      ? `Empate a ${p1}.`
+      : motivo === MOTIVO_TIEMPO_AGOTADO
+        ? resumenPorTiempo(winner.username, winner.score)
+        : `${winner.username} ganó con ${winner.score}.`;
+    this._finishMatch(room, winner, loser, motivo, resumen, 100, 20);
   }
 
   handlePlayerFinish(socket, data) {
@@ -257,25 +152,52 @@ export class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room || room.status !== 'PLAYING') return;
 
+    // En carreras estrellarse NO hace perder: se reporta la distancia recorrida
+    // y se resuelve por puntuación, como manda el reglamento de ese juego.
     if (room.gameId === 'carreras') {
       this.handlePlayerFinish(socket, {});
       return;
     }
 
-    room.status = 'FINISHED';
-    if (room.ghostSimulation) room.ghostSimulation.stop();
-    const isA = socket === room.playerA.socket;
-    this._finishMatch(room, isA ? room.playerB : room.playerA, isA ? room.playerA : room.playerB, 'OPPONENT_CRASH', `${(isA ? room.playerA : room.playerB).username} se estrelló contra un obstáculo.`, 100, 20);
+    // En los juegos de supervivencia (Sky Runner), quien cae pierde.
+    this._cerrarDandoVictoriaAlRival(
+      socket,
+      'OPPONENT_CRASH',
+      (nombre) => `${nombre} cayó al abismo.`,
+      100
+    );
   }
 
   handlePlayerDisqualification(socket, reason) {
+    this._cerrarDandoVictoriaAlRival(
+      socket,
+      reason,
+      () => `Descalificación por anomalía (${reason}).`,
+      100
+    );
+  }
+
+  /**
+   * Cierra el duelo dando la victoria al rival del socket indicado.
+   * Se usa cuando un jugador se rinde o cuando comete una infracción grave.
+   *
+   * @param {any} socket Socket del jugador que abandona.
+   * @param {string} motivo Código que se guarda en el historial.
+   * @param {(username: string) => string} textoResumen Texto explicativo.
+   * @param {number} puntosGanador Puntos de temporada para el ganador.
+   */
+  _cerrarDandoVictoriaAlRival(socket, motivo, textoResumen, puntosGanador) {
     const roomId = this.socketToRoom.get(socket);
     const room = roomId ? this.rooms.get(roomId) : null;
     if (!room || room.status !== 'PLAYING') return;
-    room.status = 'FINISHED';
-    if (room.ghostSimulation) room.ghostSimulation.stop();
+
     const isA = socket === room.playerA.socket;
-    this._finishMatch(room, isA ? room.playerB : room.playerA, isA ? room.playerA : room.playerB, reason, `Descalificación por anomalía (${reason}).`, 100, 0);
+    const [perdedor, ganador] = isA ? [room.playerA, room.playerB] : [room.playerB, room.playerA];
+
+    room.status = 'FINISHED';
+    cancelMatchClock(room);
+    if (room.ghostSimulation) room.ghostSimulation.stop();
+    this._finishMatch(room, ganador, perdedor, motivo, textoResumen(perdedor.username), puntosGanador, 20);
   }
 
   /**
@@ -323,6 +245,7 @@ export class RoomManager {
       const room = this.rooms.get(roomId);
       if (!room) return;
       if (room.finishTimer) clearTimeout(room.finishTimer);
+      cancelMatchClock(room);
       if (room.ghostSimulation) room.ghostSimulation.stop();
       for (const p of [room.playerA, room.playerB]) {
         if (p?.id) this.reconnectManager.cancel(p.id);
