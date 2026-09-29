@@ -169,20 +169,61 @@ Suites individuales:
 
 ## 🛑 Parar los servidores
 
-```powershell
-# Ver qué está escuchando
-netstat -ano | Select-String ":3000|:3001"
+### Los dos comandos, listos para pegar
 
-# Cerrar por PID (sustituye <PID>)
-taskkill /PID <PID> /T /F
+```powershell
+taskkill /PID 10360 /T /F    # Hub (Next.js) en :3000
+taskkill /PID 20228 /T /F    # Servidor de duelos en :3001
 ```
 
-Si el puerto está ocupado por un proceso antiguo, `taskkill` avisará
-`Access denied` cuando el proceso no sea tuyo. En ese caso ciérralo desde el
-Administrador de tareas o reinicia la sesión.
+> ⚠️ **Los PID cambian cada vez que arrancas.** Verifica antes con el comando de abajo
+> y sustituye los números.
+
+### Averiguar los PID actuales
+
+```powershell
+netstat -ano | Select-String ":3000|:3001"
+```
+
+La última columna de cada línea es el PID.
+
+### Matar todo lo que ocupe esos puertos de una vez
+
+```powershell
+foreach ($p in 3000,3001) {
+  $linea = netstat -ano | Select-String ":$p\s+.*LISTENING" | Select-Object -First 1
+  if ($linea) {
+    $procId = ($linea.ToString() -split '\s+')[-1]
+    Write-Host "Cerrando :$p (PID $procId)"
+    taskkill /PID $procId /T /F
+  } else {
+    Write-Host ":$p ya estaba libre"
+  }
+}
+```
+
+### Si `taskkill` responde `Access denied`
+
+Significa que el proceso **no es tuyo** (lo lanzó otra sesión, otro usuario o una
+tarea en segundo plano). Opciones:
+
+1. **Administrador de tareas** (`Ctrl+Shift+Esc`) → busca `Node.js` → *Finalizar tarea*.
+2. Cerrar la terminal donde lo arrancaste.
+3. Reiniciar la sesión de Windows.
 
 > 💡 **Truco:** el campo `uptimeSeconds` de `/health` delata un servidor viejo.
-> Si marca horas cuando acabas de arrancar, estás hablando con otro proceso.
+> Si marca horas cuando acabas de arrancar, estás hablando con otro proceso
+> distinto del que crees.
+
+### Arrancar en otro puerto (sin pelearse con el proceso viejo)
+
+```powershell
+$env:PORT='3002'; npm run dev:realtime
+```
+Recuerda apuntar el Hub al nuevo puerto en `apps/hub/.env.local`:
+```
+NEXT_PUBLIC_REALTIME_WS_URL="ws://localhost:3002/ws"
+```
 
 ---
 
