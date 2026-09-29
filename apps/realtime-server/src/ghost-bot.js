@@ -6,19 +6,68 @@ import { randomUUID } from 'node:crypto';
  * Cumple AGENTS.md y playwin-code-governance (< 350 líneas).
  */
 
+/**
+ * RIVALES DE DIVISIÓN (bots de relleno).
+ *
+ * ⚠️ REGLAS DE DISEÑO — leer antes de tocar esta lista:
+ *
+ * 1. `rank` DEBE corresponder a `skillRating` según los umbrales oficiales de
+ *    `constants.js`. Antes la lista era incoherente: un bot DIAMANTE con 2050
+ *    de MMR aparecía contra jugadores de ORO de 1820, que es exactamente lo
+ *    contrario de lo que promete el sharding por habilidad.
+ *
+ * 2. Debe haber VARIOS bots por división. Si solo existe uno por tramo, el
+ *    jugador se enfrenta siempre al mismo rival y se nota artificial.
+ *
+ * 3. El MMR de cada bot está dentro de su banda de división, así que un jugador
+ *    solo se empareja con rivales de su nivel.
+ */
 export const DIVISION_RIVALS = [
-  { id: '11111111-1111-4111-8111-111111111111', username: 'carlos_pro', avatar: '🏎️', rank: 'ORO', skillRating: 1845 },
-  { id: '22222222-2222-4222-8222-222222222222', username: 'alex_pro', avatar: '🔥', rank: 'ORO', skillRating: 1820 },
-  { id: '33333333-3333-4333-8333-333333333333', username: 'valkyria_99', avatar: '⚡', rank: 'PLATINO', skillRating: 1910 },
-  { id: '44444444-4444-4444-8444-444444444444', username: 'titan_speed', avatar: '🏆', rank: 'DIAMANTE', skillRating: 2050 },
-  { id: '55555555-5555-4555-8555-555555555555', username: 'novato_esports', avatar: '🚀', rank: 'ORO', skillRating: 1795 },
+  // ── BRONZE (MMR 0–1399) ────────────────────────────────────────────────
+  { id: 'b1000000-0000-4000-8000-000000000001', username: 'aprendiz_leo', avatar: '🌱', rank: 'BRONZE', skillRating: 1215 },
+  { id: 'b1000000-0000-4000-8000-000000000002', username: 'nico_novato', avatar: '🥉', rank: 'BRONZE', skillRating: 1305 },
+
+  // ── SILVER (MMR 1400–1599) ─────────────────────────────────────────────
+  { id: 'b2000000-0000-4000-8000-000000000001', username: 'sofia_plata', avatar: '🥈', rank: 'SILVER', skillRating: 1450 },
+  { id: 'b2000000-0000-4000-8000-000000000002', username: 'dani_runner', avatar: '💨', rank: 'SILVER', skillRating: 1550 },
+
+  // ── GOLD (MMR 1600–1849) ───────────────────────────────────────────────
+  { id: 'b3000000-0000-4000-8000-000000000001', username: 'carlos_pro', avatar: '🏎️', rank: 'GOLD', skillRating: 1680 },
+  { id: 'b3000000-0000-4000-8000-000000000002', username: 'novato_esports', avatar: '🚀', rank: 'GOLD', skillRating: 1795 },
+
+  // ── PLATINUM (MMR 1850–2099) ───────────────────────────────────────────
+  { id: 'b4000000-0000-4000-8000-000000000001', username: 'valkyria_99', avatar: '⚡', rank: 'PLATINUM', skillRating: 1910 },
+  { id: 'b4000000-0000-4000-8000-000000000002', username: 'alex_pro', avatar: '🔥', rank: 'PLATINUM', skillRating: 2005 },
+
+  // ── DIAMOND (MMR 2100–2399) ────────────────────────────────────────────
+  { id: 'b5000000-0000-4000-8000-000000000001', username: 'titan_speed', avatar: '🏆', rank: 'DIAMOND', skillRating: 2180 },
+  { id: 'b5000000-0000-4000-8000-000000000002', username: 'kira_apex', avatar: '💎', rank: 'DIAMOND', skillRating: 2290 },
+
+  // ── ELITE (MMR 2400+) ──────────────────────────────────────────────────
+  { id: 'b6000000-0000-4000-8000-000000000001', username: 'zero_legend', avatar: '👑', rank: 'ELITE', skillRating: 2450 },
+  { id: 'b6000000-0000-4000-8000-000000000002', username: 'nova_prime', avatar: '🌟', rank: 'ELITE', skillRating: 2600 },
 ];
 
-export function getDivisionRival(excludeUsername) {
-  const filtered = DIVISION_RIVALS.filter(
+/**
+ * Elige un rival de división apropiado para el jugador.
+ *
+ * Prioriza la MISMA división que el jugador. Si esa división aún no tiene bots
+ * (o el jugador no tiene pasaporte), cae a la lista completa antes que dejarle
+ * esperando indefinidamente.
+ *
+ * @param {string} [excludeUsername] Evita que el rival sea el propio jugador.
+ * @param {string} [preferredTier] División del jugador (BRONZE..ELITE).
+ */
+export function getDivisionRival(excludeUsername, preferredTier) {
+  const notSelf = DIVISION_RIVALS.filter(
     (r) => r.username.toLowerCase() !== (excludeUsername || '').toLowerCase()
   );
-  const pool = filtered.length > 0 ? filtered : DIVISION_RIVALS;
+  const base = notSelf.length > 0 ? notSelf : DIVISION_RIVALS;
+
+  // Misma división primero: es lo que promete el sharding por habilidad.
+  const sameTier = preferredTier ? base.filter((r) => r.rank === preferredTier) : [];
+  const pool = sameTier.length > 0 ? sameTier : base;
+
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -127,10 +176,11 @@ export class GhostSimulation {
   }
 }
 
-export function buildGhostRoom(gameId, entry, callbacks) {
+export function buildGhostRoom(gameId, entry, callbacks, preferredTier) {
   const roomId = `duel_${gameId}_${randomUUID().slice(0, 8)}`;
   const seed = Math.floor(Math.random() * 9000000) + 1000000;
-  const rival = getDivisionRival(entry.player.username);
+  // El rival se elige de la MISMA división que el jugador, no al azar.
+  const rival = getDivisionRival(entry.player.username, preferredTier);
   const now = Date.now();
 
   const room = {

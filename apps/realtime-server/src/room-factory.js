@@ -1,6 +1,32 @@
 import { randomUUID } from 'node:crypto';
-import { userService } from '@playwin/database';
+import { userService, query } from '@playwin/database';
+import { resolveRankTier } from '@playwin/database/constants';
 import { buildGhostRoom } from './ghost-bot.js';
+
+/**
+ * Resuelve la división real del jugador en un juego desde su pasaporte.
+ *
+ * Se consulta la base de datos a propósito: el rango que envía el cliente NO es
+ * fiable, y usarlo permitiría a un jugador de BRONCE pedir un rival fácil.
+ *
+ * @returns {Promise<string|undefined>} División (BRONZE..ELITE) o undefined si
+ *   el jugador aún no tiene pasaporte.
+ */
+async function resolvePlayerTier(userId, gameId) {
+  try {
+    const res = await query('SELECT skill_rating FROM game_passports WHERE user_id = $1 AND game_id = $2;', [
+      userId,
+      gameId,
+    ]);
+    const rating = res.rows[0]?.skill_rating;
+    return rating === undefined || rating === null ? undefined : resolveRankTier(rating);
+  } catch (err) {
+    // Si la consulta falla, se empareja con la lista completa antes que dejar
+    // al jugador esperando indefinidamente.
+    console.warn('[RoomFactory] No se pudo resolver la división del jugador:', err.message);
+    return undefined;
+  }
+}
 
 /**
  * PLAY WIN REALTIME — CREADOR DE SALAS (room-factory.js)
@@ -49,7 +75,12 @@ export async function createDuelRoom(gameId, entryA, entryB, sendFn, broadcastFn
 }
 
 export async function createGhostRoom(gameId, entry, callbacks, sendFn) {
-  const { room, rival, roomId, seed } = buildGhostRoom(gameId, entry, callbacks);
+  // La división del jugador se lee de SU pasaporte (dato del servidor, no del
+  // cliente) para elegir un rival del mismo nivel. Sin esto, a un jugador de ORO
+  // podía tocarte un bot DIAMANTE.
+  const preferredTier = await resolvePlayerTier(entry.player.id, gameId);
+
+  const { room, rival, roomId, seed } = buildGhostRoom(gameId, entry, callbacks, preferredTier);
 
   try {
     const dbRival = await userService.ensureUser({ id: rival.id, username: rival.username, avatarUrl: rival.avatar });
@@ -66,6 +97,15 @@ export async function createGhostRoom(gameId, entry, callbacks, sendFn) {
     console.warn('[RoomFactory] Failed to ensure ghost bot user:', e.message);
   }
 
-  sendFn(entry.socket, { event: 'MATCH_START', roomId, seed, role: 'PLAYER_A', player: entry.player, opponent: rival });
+  // `isBot` viaja al cliente para que la interfaz pueda indicar claramente que
+  // el rival es un relleno y no una persona. Ocultarlo es deshonesto.
+  sendFn(entry.socket, {
+    event: 'MATCH_START',
+    roomId,
+    seed,
+    role: 'PLAYER_A',
+    player: entry.player,
+    opponent: { ...rival, isBot: true },
+  });
   return { room, roomId };
 }

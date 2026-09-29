@@ -21,6 +21,7 @@
     "test:email": "node --env-file=.env.test apps/hub/test/email_and_recovery_test.mjs",
     "test:history": "node --env-file=.env.test apps/hub/test/match_history_test.mjs",
     "test:collusion": "node --env-file=.env.test apps/realtime-server/test/collusion_spec.js",
+    "test:ghost": "node --env-file=.env.test apps/realtime-server/test/ghost-bot_spec.js",
     "test:leagues": "node --env-file=.env.test packages/database/test/league_integrity_spec.js",
     "test:migrate": "node --env-file=.env.test packages/database/src/migrate-league-integrity.mjs",
     "test:migrate:ranks": "node --env-file=.env.test packages/database/src/migrate-rank-tier-trigger.mjs",

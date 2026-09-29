@@ -266,10 +266,9 @@
   gap: 10px;
 }
 .pw-hud-score {
-  font-family: var(--pw-font), system-ui, sans-serif;
-  font-size: 19px;
+  font-family: var(--pw-font-hud);
+  font-size: 18px;
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
   color: var(--pw-ink);
 }
 .pw-lead-pill {
@@ -337,3 +336,14 @@
   gap: 12px;
   justify-content: center;
 }
+.pw-ping-badge { font-family: var(--pw-font-hud); font-size: 10px; color: var(--pw-green); background: rgba(5,150,105,0.15); padding: 2px 6px; border-radius: 999px; margin-left: 6px; }
+.pw-reconnect-banner { position: absolute; top: 68px; left: 50%; transform: translateX(-50%); background: var(--pw-orange); color: #fff; font-size: 12px; font-weight: 700; padding: 6px 16px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.25); z-index: 9999; display: none; }
+.pw-reconnect-banner.active { display: block; }
+
+/* AVISO DE RIVAL DE ENTRENAMIENTO (bot): el jugador DEBE saber cuándo su rival
+   es un relleno del servidor y no una persona, o creerá que ganó a alguien
+   cuando en realidad no había nadie en la cola. */
+.pw-bot-badge { display: none; font-size: 11px; font-weight: 700; color: var(--pw-orange-2); background: rgba(210,105,26,0.12); border: 1px solid var(--pw-orange); border-radius: 999px; padding: 5px 14px; margin: 10px auto 0; max-width: 92%; }
+.pw-bot-badge.active { display: block; }
+.pw-hud-bot-badge { display: none; font-family: var(--pw-font-hud); font-size: 9px; font-weight: 700; color: var(--pw-orange-2); background: rgba(210,105,26,0.16); border-radius: 999px; padding: 2px 7px; margin-top: 3px; }
+.pw-hud-bot-badge.active { display: inline-block; }
