@@ -1,0 +1,17 @@
+{
+  "name": "@playwin/realtime-server",
+  "version": "1.0.0",
+  "description": "Servidor de salas de duelo 1v1 y retransmisión de estados en tiempo real para Play Win",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.js",
+    "start": "node src/server.js",
+    "test": "node test/network_scenarios_test.js && node test/anticheat_test.js && node test/carreras_anticheat_spec.js && node test/flapy_anticheat_spec.js && node test/cybersecurity_suite.js",
+    "test:network": "node test/network_scenarios_test.js"
+  },
+  "dependencies": {
+    "@playwin/database": "file:../../packages/database",
+    "ws": "^8.18.0"
+  }
+}

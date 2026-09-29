@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Play Win - Fuerza Espacial 1v1</title>
+  
+  <!-- Tipografía Oficial Inter & Orbitron -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+  
+  <!-- SDK Universal Play Win & Estilos de Juego -->
+  <link rel="stylesheet" href="../packages/game-sdk/playwin-bridge.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-wrapper">
+    <canvas id="viewport"></canvas>
+
+    <!-- HUD Superior del Juego -->
+    <header id="game_hud" class="hud-overlay">
+      <div class="hud-left">
+        <div class="hud-card">
+          <span class="hud-label">PUNTOS</span>
+          <span id="score" class="hud-val">0</span>
+        </div>
+        <div class="hud-card record-card">
+          <span class="hud-label">RÉCORD</span>
+          <span id="best_score" class="hud-val">0</span>
+        </div>
+        <div class="hud-card wave-card">
+          <span class="hud-label">SECTOR</span>
+          <span id="wave_display" class="hud-val">1</span>
+        </div>
+        <div class="hud-card speed-card" id="speed_card">
+          <span class="hud-label">VELOCIDAD</span>
+          <span id="speed_display" class="hud-val">1.0x</span>
+        </div>
+      </div>
+
+      <div class="hud-center">
+        <div class="brand-badge">PLAY WIN 1v1</div>
+        <div id="combo_badge" class="combo-pill">COMBO x1</div>
+      </div>
+
+      <div class="hud-right">
+        <div class="hud-card lives-card">
+          <span class="hud-label">ESCUDOS</span>
+          <div id="lives_container" class="lives-display">
+            <span class="shield-pip active"></span>
+            <span class="shield-pip active"></span>
+            <span class="shield-pip active"></span>
+          </div>
+        </div>
+        <button id="sound_toggle" class="hud-btn-icon" title="Sonido">🔊</button>
+      </div>
+    </header>
+
+    <!-- Controles Táctiles para Móvil / Tablet -->
+    <div id="mobile_controls" class="mobile-touch-panel">
+      <!-- Botón de Bomba Cuántica (Pulgar Izquierdo) -->
+      <div class="mobile-left-cluster">
+        <button id="btn_bomb" class="btn-bomb" title="Bomba Cuántica" aria-label="Bomba Cuántica">
+          <span class="bomb-icon">💥</span>
+          <span class="bomb-text">BOMBA</span>
+          <span class="bomb-count" id="bomb_count">1</span>
+        </button>
+      </div>
+
+      <!-- Botones de Disparo y Autofire (Pulgar Derecho) -->
+      <div class="actions-box">
+        <button id="btn_autofire" class="btn-turbo active" title="Alternar Disparo Automático">AUTO: SÍ</button>
+        <button id="btn_shoot" class="btn-fire" title="Disparar Láser" aria-label="Disparar">
+          <span>🔥</span>
+          <small>FUEGO</small>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inyección del SDK Universal y Script del Juego Original -->
+  <script src="../packages/game-sdk/playwin-bridge.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+*.log
+
+# Variables de entorno REALES — nunca se versionan.
+# Las plantillas (.env.example) SÍ se versionan a propósito.
+.env
+.env.*
+!.env.example

@@ -1,0 +1,34 @@
+Created At: 2026-09-28T20:44:59-05:00
+Completed At: 2026-09-28T20:44:59-05:00
+File Path: `file:///c:/Users/HP/OneDrive/Documentos/GitHub/Play%20Win/space/index.html`
+Total Lines: 26
+Total Bytes: 1015
+Showing lines 1 to 26
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: <!DOCTYPE html>
+2: <html lang="es">
+3: <head>
+4:   <meta charset="UTF-8">
+5:   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+6:   <title>Play Win - Fuerza Espacial 1v1</title>
+7:   
+8:   <!-- Tipografía Oficial Inter -->
+9:   <link rel="preconnect" href="https://fonts.googleapis.com">
+10:   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+11:   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+12:   
+13:   <!-- SDK Universal Play Win & Estilos de Juego -->
+14:   <link rel="stylesheet" href="../packages/game-sdk/playwin-bridge.css">
+15:   <link rel="stylesheet" href="style.css">
+16: </head>
+17: <body>
+18:   <div id="game-wrapper">
+19:     <canvas id="viewport"></canvas>
+20:   </div>
+21: 
+22:   <!-- Inyección del SDK Universal y Controlador Modular -->
+23:   <script src="../packages/game-sdk/playwin-bridge.js"></script>
+24:   <script type="module" src="js/game.js"></script>
+25: </body>
+26: </html>
+The above content shows the entire, complete file contents of the requested file.

@@ -1,0 +1,244 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@700;900&display=swap');
+
+:root {
+  --bg: #dcdcdb;
+  --hero-bg-1: #edecea;
+  --hero-bg-2: #c8c7c5;
+  --ink: #0c0c0e;
+  --ink-soft: #2a2a2d;
+  --mute: #8a8780;
+  --line: #dad6ce;
+  --orange: #d2691a;
+  --orange-2: #bb570f;
+  --card: #f2f1ee;
+  --pill-dark: #0c0c0e;
+  --pill-light: #e8e7e4;
+  --shadow-warm: 0 18px 45px rgba(12, 12, 14, 0.08);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+  padding: 24px 20px;
+}
+
+/* Grano Analógico Mate */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.038;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Barra de Navegación Flotante en Píldora */
+.nav-pill-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 24px;
+  background: rgba(237, 236, 234, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  max-width: 1200px;
+  margin: 0 auto 28px;
+  position: sticky;
+  top: 16px;
+  z-index: 100;
+}
+
+.brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 900;
+  font-size: 17px;
+  letter-spacing: -0.5px;
+  color: var(--ink);
+}
+
+.brand-dot {
+  width: 10px;
+  height: 10px;
+  background: var(--orange);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--orange);
+}
+
+.nav-links {
+  display: flex;
+  gap: 6px;
+  background: var(--pill-light);
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.nav-link {
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nav-link.active {
+  background: var(--pill-dark);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(12, 12, 14, 0.2);
+}
+
+/* Tarjeta Hero Principal */
+.hero-card {
+  border-radius: 28px;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--hero-bg-1) 0%, var(--hero-bg-2) 100%);
+  position: relative;
+  padding: 32px 36px;
+  box-shadow: var(--shadow-warm), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--line);
+  max-width: 1200px;
+  margin: 0 auto 32px;
+}
+
+/* Botones Píldora 3D */
+.btn-pill-3d {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 26px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px rgba(12, 12, 14, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.btn-pill-primary {
+  background: linear-gradient(135deg, var(--orange) 0%, var(--orange-2) 100%);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(210, 105, 26, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.btn-pill-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(210, 105, 26, 0.45);
+}
+
+.btn-pill-dark {
+  background: var(--pill-dark);
+  color: #fff;
+}
+
+.btn-pill-dark:hover {
+  transform: translateY(-2px);
+  background: #1c1c20;
+}
+
+.btn-pill-light {
+  background: var(--pill-light);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.btn-pill-light:hover {
+  background: #dedcd7;
+}
+
+/* Tarjetas Secundarias */
+.warm-card {
+  background: var(--card);
+  border-radius: 22px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 25px rgba(12, 12, 14, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.warm-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 36px rgba(12, 12, 14, 0.08);
+}
+
+/* Modales y Diálogos */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 12, 14, 0.65);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: var(--hero-bg-1);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  max-width: 500px;
+  width: 100%;
+  padding: 36px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.94) translateY(12px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Iframe de Partida Flotante */
+.game-iframe-wrapper {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+}
+
+.game-iframe-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: #0c0c0e;
+  border-bottom: 1px solid #2a2a2d;
+  color: #fff;
+}
+
+.game-iframe-element {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: none;
+}

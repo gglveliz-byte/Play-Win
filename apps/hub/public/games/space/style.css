@@ -1,0 +1,331 @@
+:root {
+  --orange: #d2691a;
+  --orange-glow: rgba(210, 105, 26, 0.45);
+  --cyan: #00f0ff;
+  --cyan-glow: rgba(0, 240, 255, 0.4);
+  --magenta: #ff007f;
+  --bg-dark: #020617;
+  --card-bg: rgba(12, 12, 14, 0.78);
+  --card-border: rgba(210, 105, 26, 0.3);
+  --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-hud: 'Orbitron', system-ui, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+  font-family: var(--font-main);
+  color: #edecea;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+#game-wrapper {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+#viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ==========================================================================
+   HUD SUPERIOR COMPACTO Y ELEGANTE
+   ========================================================================== */
+.hud-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 15;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.88) 0%, rgba(2, 6, 23, 0) 100%);
+}
+
+.hud-left, .hud-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.hud-card {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.hud-label {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.hud-val {
+  font-family: var(--font-hud);
+  font-size: 14px;
+  font-weight: 800;
+  color: #edecea;
+}
+
+.wave-card .hud-val {
+  color: var(--cyan);
+}
+
+.speed-card .hud-val {
+  color: var(--orange);
+}
+
+.record-card {
+  display: none;
+}
+@media (min-width: 600px) {
+  .record-card { display: flex; }
+}
+
+.hud-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.brand-badge {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--orange);
+  text-transform: uppercase;
+}
+
+.combo-pill {
+  font-family: var(--font-hud);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(210, 105, 26, 0.2);
+  border: 1px solid var(--orange);
+  color: #ffb703;
+}
+
+.lives-display {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.shield-pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  transition: all 0.2s ease;
+}
+
+.shield-pip.active {
+  background: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan-glow);
+  border-color: #ffffff;
+}
+
+.hud-btn-icon {
+  pointer-events: auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #edecea;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.hud-btn-icon:active {
+  transform: scale(0.9);
+}
+
+/* ==========================================================================
+   CONTROLES TÁCTILES ERGONÓMICOS PARA MÓVILES Y TABLETS
+   ========================================================================== */
+.mobile-touch-panel {
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  width: 100%;
+  padding: 0 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  z-index: 25;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.mobile-left-cluster, .actions-box {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.actions-box {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* Botón BOMBA CUÁNTICA (Pulgar Izquierdo) */
+.btn-bomb {
+  position: relative;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(210, 105, 26, 0.95) 0%, rgba(139, 56, 10, 0.95) 100%);
+  border: 2.5px solid #ff9248;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px var(--orange-glow), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.1s, filter 0.1s;
+}
+
+.btn-bomb:active {
+  transform: scale(0.9);
+  filter: brightness(1.3);
+}
+
+.bomb-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.bomb-text {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: #ffeedd;
+}
+
+.bomb-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--magenta);
+  color: #ffffff;
+  font-family: var(--font-hud);
+  font-size: 11px;
+  font-weight: 900;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 8px rgba(255, 0, 127, 0.7);
+}
+
+/* Botón FUEGO LÁSER (Pulgar Derecho) */
+.btn-fire {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(2, 132, 199, 0.95) 0%, rgba(3, 105, 161, 0.95) 100%);
+  border: 2.5px solid #38bdf8;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px var(--cyan-glow), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.1s, filter 0.1s;
+}
+
+.btn-fire:active {
+  transform: scale(0.9);
+  filter: brightness(1.3);
+}
+
+.btn-fire span {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.btn-fire small {
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #e0f2fe;
+}
+
+/* Botón TOGGLE AUTO-FIRE */
+.btn-turbo {
+  padding: 6px 14px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(12, 12, 14, 0.82);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  color: #94a3b8;
+  font-family: var(--font-hud);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: all 0.2s;
+}
+
+.btn-turbo.active {
+  background: rgba(210, 105, 26, 0.3);
+  border-color: var(--orange);
+  color: #ffedd5;
+  box-shadow: 0 0 10px var(--orange-glow);
+}
+
+/* En pantallas de escritorio amplias sin toque, ocultar los botones flotantes */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .mobile-touch-panel {
+    display: none;
+  }
+}

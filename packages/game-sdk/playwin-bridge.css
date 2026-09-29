@@ -1,0 +1,341 @@
+/* ==========================================================================
+   PLAY WIN BRIDGE — SISTEMA DE DISEÑO WARM EDITORIAL TANGERINE
+   Tokens Oficiales eSports para Pantallas Estándar 1v1
+   ========================================================================== */
+
+:root {
+  --pw-bg: #dcdcdb;
+  --pw-hero-1: #edecea;
+  --pw-hero-2: #c8c7c5;
+  --pw-card: #f2f1ee;
+  --pw-ink: #0c0c0e;
+  --pw-ink-soft: #2a2a2d;
+  --pw-mute: #8a8780;
+  --pw-line: #dad6ce;
+  --pw-orange: #d2691a;
+  --pw-orange-2: #bb570f;
+  --pw-green: #059669;
+  --pw-red: #dc2626;
+  --pw-pill-dark: #0c0c0e;
+  --pw-pill-light: #e8e7e4;
+  --pw-font: "Inter", system-ui, -apple-system, sans-serif;
+  --pw-font-hud: "Orbitron", sans-serif;
+}
+
+/* Capa Contenedora Global del SDK sobre el juego */
+#playwin-ui-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99999;
+  font-family: var(--pw-font);
+  user-select: none;
+}
+
+/* Pantallas Overlay (Matchmaking, Versus, Resultados) */
+.pw-screen {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 12, 14, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  padding: 20px;
+}
+
+.pw-screen.active {
+  display: flex;
+  opacity: 1;
+}
+
+/* Tarjeta Estilo Hero Editorial */
+.pw-card {
+  background: linear-gradient(180deg, var(--pw-hero-1) 0%, var(--pw-hero-2) 100%);
+  border-radius: 28px;
+  padding: 32px 36px;
+  width: 100%;
+  max-width: 520px;
+  text-align: center;
+  position: relative;
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 -1px 2px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+/* Textura Grano Analógico Mate */
+.pw-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.1  0 0 0 0 0.1  0 0 0 0 0.1  0 0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Píldora de Marca */
+.pw-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--pw-ink);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+/* Radar de Búsqueda de Matchmaking */
+.pw-radar-container {
+  width: 90px;
+  height: 90px;
+  margin: 12px auto 20px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pw-radar-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--pw-orange);
+  animation: pwPulse 1.8s infinite ease-out;
+}
+.pw-radar-center {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--pw-orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 14px;
+  box-shadow: 0 0 16px rgba(210, 105, 26, 0.6);
+}
+@keyframes pwPulse {
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+.pw-title {
+  color: var(--pw-ink);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.pw-subtitle {
+  color: var(--pw-mute);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 24px;
+}
+
+/* Cuadrícula de Versus */
+.pw-versus-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  margin: 20px 0;
+}
+.pw-player-box {
+  background: var(--pw-card);
+  padding: 16px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--pw-line);
+}
+.pw-avatar-bubble {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: var(--pw-ink);
+  color: #fff;
+  margin: 0 auto 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 18px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+.pw-pname {
+  color: var(--pw-ink);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pw-prank {
+  display: inline-block;
+  background: var(--pw-pill-light);
+  color: var(--pw-ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-top: 4px;
+}
+.pw-vs-badge {
+  font-family: var(--pw-font-hud);
+  font-weight: 900;
+  font-size: 22px;
+  color: var(--pw-orange);
+  letter-spacing: 0.04em;
+}
+.pw-countdown-display {
+  font-family: var(--pw-font-hud);
+  font-size: 64px;
+  font-weight: 900;
+  color: var(--pw-ink);
+  margin: 10px 0;
+}
+
+/* Botones en Píldora 3D */
+.pw-btn-pill {
+  background: var(--pw-pill-dark);
+  color: #fafaf7;
+  border: none;
+  padding: 12px 26px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 10px 20px -6px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: transform 0.2s, background 0.2s;
+  text-decoration: none;
+}
+.pw-btn-pill:hover {
+  transform: translateY(-2px);
+  background: #1c1c22;
+}
+.pw-btn-secondary {
+  background: rgba(120, 118, 112, 0.16);
+  color: var(--pw-ink);
+  box-shadow: none;
+  border: 1px solid var(--pw-line);
+}
+.pw-btn-secondary:hover {
+  background: rgba(120, 118, 112, 0.28);
+}
+
+/* HUD Superior 1v1 Flotante */
+#pw-live-hud {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% - 32px);
+  max-width: 860px;
+  background: rgba(242, 241, 238, 0.92);
+  backdrop-filter: blur(12px);
+  border-radius: 999px;
+  padding: 8px 18px;
+  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  pointer-events: auto;
+  z-index: 10000;
+}
+#pw-live-hud.active {
+  display: flex;
+}
+.pw-hud-col {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pw-hud-score {
+  font-family: var(--pw-font-hud);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--pw-ink);
+}
+.pw-lead-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.pw-lead-winning {
+  background: rgba(5, 150, 105, 0.15);
+  color: var(--pw-green);
+  border: 1px solid rgba(5, 150, 105, 0.3);
+}
+.pw-lead-losing {
+  background: rgba(210, 105, 26, 0.15);
+  color: var(--pw-orange);
+  border: 1px solid rgba(210, 105, 26, 0.3);
+}
+.pw-btn-surrender {
+  background: transparent;
+  border: 1px solid var(--pw-line);
+  color: var(--pw-mute);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.pw-btn-surrender:hover {
+  background: var(--pw-ink);
+  color: #fff;
+  border-color: var(--pw-ink);
+}
+
+/* Pantalla de Resultados */
+.pw-result-banner {
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+.pw-result-win {
+  color: var(--pw-orange);
+}
+.pw-result-loss {
+  color: var(--pw-ink-soft);
+}
+.pw-points-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--pw-pill-light);
+  color: var(--pw-ink);
+  font-family: var(--pw-font-hud);
+  font-size: 15px;
+  font-weight: 800;
+  padding: 8px 18px;
+  border-radius: 999px;
+  margin: 14px 0 24px;
+}
+.pw-btn-stack {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.pw-ping-badge { font-family: var(--pw-font-hud); font-size: 10px; color: var(--pw-green); background: rgba(5,150,105,0.15); padding: 2px 6px; border-radius: 999px; margin-left: 6px; }
+.pw-reconnect-banner { position: absolute; top: 68px; left: 50%; transform: translateX(-50%); background: var(--pw-orange); color: #fff; font-size: 12px; font-weight: 700; padding: 6px 16px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.25); z-index: 9999; display: none; }
+.pw-reconnect-banner.active { display: block; }

@@ -1,0 +1,200 @@
+Created At: 2026-09-28T15:34:45-05:00
+Completed At: 2026-09-28T15:34:45-05:00
+File Path: `file:///c:/Users/HP/OneDrive/Documentos/GitHub/Play%20Win/space/index.html`
+Total Lines: 192
+Total Bytes: 8744
+Showing lines 1 to 192
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: <!DOCTYPE html>
+2: <html lang="es">
+3: <head>
+4:     <meta charset="UTF-8">
+5:     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+6:     <title>Play Win - Fuerza Espacial</title>
+7:     <!-- Google Fonts modernas: Orbitron & Rajdhani -->
+8:     <link rel="preconnect" href="https://fonts.googleapis.com">
+9:     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+10:     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+11:     <link rel="stylesheet" href="style.css">
+12: </head>
+13: <body>
+14:     <div id="game-wrapper">
+15:         <canvas id="viewport"></canvas>
+16: 
+17:         <!-- HUD Superior durante el juego -->
+18:         <header id="game_hud" class="hud-overlay">
+19:             <div class="hud-left">
+20:                 <div class="hud-card">
+21:                     <span class="hud-label">PUNTOS</span>
+22:                     <span id="score" class="hud-val">0</span>
+23:                 </div>
+24:                 <div class="hud-card record-card">
+25:                     <span class="hud-label">RÉCORD</span>
+26:                     <span id="best_score" class="hud-val">0</span>
+27:                 </div>
+28:                 <div class="hud-card wave-card">
+29:                     <span class="hud-label">SECTOR</span>
+30:                     <span id="wave_display" class="hud-val">1</span>
+31:                 </div>
+32:                 <div class="hud-card speed-card" id="speed_card">
+33:                     <span class="hud-label">VELOCIDAD</span>
+34:                     <span id="speed_display" class="hud-val">1.0x</span>
+35:                 </div>
+36:             </div>
+37: 
+38:             <div class="hud-center">
+39:                 <div class="brand-badge">PLAY WIN</div>
+40:                 <div id="combo_badge" class="combo-pill">COMBO x2</div>
+41:             </div>
+42: 
+43:             <div class="hud-right">
+44:                 <div class="hud-card lives-card">
+45:                     <span class="hud-label">ESCUDOS</span>
+46:                     <div id="lives_container" class="lives-display">
+47:                         <span class="shield-pip active"></span>
+48:                         <span class="shield-pip active"></span>
+49:                         <span class="shield-pip active"></span>
+50:                     </div>
+51:                 </div>
+52:                 <button id="sound_toggle" class="hud-btn-icon" title="Sonido" aria-label="Alternar sonido">🔊</button>
+53:                 <button id="pause_toggle" class="hud-btn-icon" title="Pausar" aria-label="Pausar juego">⏸</button>
+54:             </div>
+55:         </header>
+56: 
+57:         <!-- Pantalla de Título e Inicio -->
+58:         <div id="screen_title" class="ui-screen active">
+59:             <div class="glass-panel">
+60:                 <div class="brand-pill">PLAY WIN ARCADE</div>
+61:                 <h1 class="neon-title">FUERZA ESPACIAL</h1>
+62:                 <p class="neon-subtitle">BATALLA GALÁCTICA EN EL HIPERESPACIO</p>
+63: 
+64:                 <div class="instruction-grid">
+65:                     <div class="inst-card">
+66:                         <span class="inst-icon">🕹️</span>
+67:                         <div class="inst-info">
+68:                             <strong>PILOTAR NAVE</strong>
+69:                             <p>Teclas W-A-S-D / Flechas, Ratón o Arrastra con el dedo</p>
+70:                         </div>
+71:                     </div>
+72:                     <div class="inst-card">
+73:                         <span class="inst-icon">⚡</span>
+74:                         <div class="inst-info">
+75:                             <strong>DISPARAR LÁSER</strong>
+76:                             <p>Barra Espaciadora, Clic Izquierdo o Fuego Automático</p>
+77:                         </div>
+78:                     </div>
+79:                     <div class="inst-card">
+80:                         <span class="inst-icon">💎</span>
+81:                         <div class="inst-info">
+82:                             <strong>CÁPSULAS Y MEJORAS</strong>
+83:                             <p>Recoge Potenciadores [P], Escudos [S] y Bombas [B]</p>
+84:                         </div>
+85:                     </div>
+86:                 </div>
+87: 
+88:                 <div id="menu_record_box" class="menu-record-box">
+89:                     <span>MEJOR MARCA REGISTRADA: </span>
+90:                     <strong id="menu_best_val">0 PUNTOS</strong>
+91:                 </div>
+92: 
+93:                 <button id="btn_start" class="btn-glow-primary">
+94:                     <span class="btn-symbol">▶</span> INICIAR MISIÓN
+95:                 </button>
+96:             </div>
+97:         </div>
+98: 
+99:         <!-- Pantalla de Pausa -->
+100:         <div id="screen_pause" class="ui-screen">
+101:             <div class="glass-panel pause-panel">
+102:                 <div class="brand-pill">SISTEMA EN ESPERA</div>
+103:                 <h2 class="neon-title pause-title">MISIÓN EN PAUSA</h2>
+104:                 <p class="neon-subtitle">PROPULSORES DETENIDOS TEMPORALMENTE</p>
+105: 
+106:                 <div class="actions-row">
+107:                     <button id="btn_resume" class="btn-glow-primary">
+108:                         <span class="btn-symbol">▶</span> REANUDAR COMBATE
+109:                     </button>
+110:                     <button id="btn_restart_pause" class="btn-glow-secondary">
+111:                         <span class="btn-symbol">↺</span> REINICIAR MISIÓN
+112:                     </button>
+113:                     <button id="btn_menu_pause" class="btn-glow-secondary">
+114:                         <span class="btn-symbol">⌂</span> MENÚ PRINCIPAL
+115:                     </button>
+116:                 </div>
+117:             </div>
+118:         </div>
+119: 
+120:         <!-- Pantalla de Game Over -->
+121:         <div id="screen_gameover" class="ui-screen">
+122:             <div class="glass-panel gameover-panel">
+123:                 <div class="alert-pill">¡ALERTA DE SISTEMA!</div>
+124:                 <h2 class="gameover-title">MISIÓN FALLIDA</h2>
+125:                 <p class="gameover-desc">Tu nave ha sido neutralizada por el escuadrón enemigo.</p>
+126: 
+127:                 <div id="new_record_badge" class="new-record-badge" style="display: none;">
+128:                     🏆 ¡NUEVO RÉCORD GALÁCTICO ALCANZADO!
+129:                 </div>
+130: 
+131:                 <div class="stats-board">
+132:                     <div class="stat-box">
+133:                         <span class="stat-label">PUNTUACIÓN FINAL</span>
+134:                         <span id="final_score" class="stat-val">0</span>
+135:                     </div>
+136:                     <div class="stat-sep"></div>
+137:                     <div class="stat-box">
+138:                         <span class="stat-label">MEJOR RÉCORD</span>
+139:                         <span id="final_best" class="stat-val">0</span>
+140:                     </div>
+141:                     <div class="stat-sep"></div>
+142:                     <div class="stat-box">
+143:                         <span class="stat-label">SECTOR ALCANZADO</span>
+144:                         <span id="final_wave" class="stat-val">1</span>
+145:                     </div>
+146:                     <div class="stat-sep"></div>
+147:                     <div class="stat-box">
+148:                         <span class="stat-label">VELOCIDAD MÁX</span>
+149:                         <span id="final_speed" class="stat-val">1.0x</span>
+150:                     </div>
+151:                     <div class="stat-sep"></div>
+152:                     <div class="stat-box">
+153:                         <span class="stat-label">MEJOR COMBO</span>
+154:                         <span id="final_combo" class="stat-val">x1</span>
+155:                     </div>
+156:                 </div>
+157: 
+158:                 <div class="actions-row">
+159:                     <button id="btn_restart" class="btn-glow-primary">
+160:                         <span class="btn-symbol">↺</span> VOLVER A JUGAR
+161:                     </button>
+162:                     <button id="btn_menu" class="btn-glow-secondary">
+163:                         <span class="btn-symbol">⌂</span> MENÚ PRINCIPAL
+164:                     </button>
+165:                 </div>
+166:             </div>
+167:         </div>
+168: 
+169:         <!-- Controles Táctiles para Móvil -->
+170:         <div id="mobile_controls" class="mobile-touch-panel">
+171:             <!-- Botón de Bomba / Habilidad Izquierda -->
+172:             <div class="mobile-left-cluster">
+173:                 <button id="btn_bomb" class="btn-bomb" title="Bomba Cuántica">
+174:                     <span class="bomb-icon">💥</span>
+175:                     <span class="bomb-count" id="bomb_count">1</span>
+176:                 </button>
+177:             </div>
+178: 
+179:             <!-- Botones de Acción Derecha -->
+180:             <div class="actions-box">
+181:                 <button id="btn_autofire" class="btn-turbo active">AUTO: SÍ</button>
+182:                 <button id="btn_shoot" class="btn-fire">
+183:                     <span>FUEGO</span>
+184:                     <small>LÁSER</small>
+185:                 </button>
+186:             </div>
+187:         </div>
+188:     </div>
+189: 
+190:     <script src="script.js"></script>
+191: </body>
+192: </html>
+The above content shows the entire, complete file contents of the requested file.

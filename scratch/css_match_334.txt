@@ -1,0 +1,564 @@
+Created At: 2026-09-28T15:29:05-05:00
+Completed At: 2026-09-28T15:29:05-05:00
+File Path: `file:///c:/Users/HP/OneDrive/Documentos/GitHub/Play%20Win/carreras/style.css`
+Total Lines: 556
+Total Bytes: 12364
+Showing lines 1 to 556
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: :root {
+2:     --neon-orange: #ff6b00;
+3:     --neon-yellow: #ffd600;
+4:     --neon-cyan: #00f0ff;
+5:     --neon-red: #ff3b30;
+6:     --bg-dark: #050811;
+7:     --glass-card: rgba(10, 17, 36, 0.82);
+8:     --glass-border: rgba(255, 107, 0, 0.35);
+9:     --font-heading: 'Orbitron', -apple-system, sans-serif;
+10:     --font-body: 'Rajdhani', -apple-system, sans-serif;
+11: }
+12: 
+13: * {
+14:     margin: 0;
+15:     padding: 0;
+16:     box-sizing: border-box;
+17:     -webkit-tap-highlight-color: transparent;
+18: }
+19: 
+20: html, body {
+21:     width: 100%;
+22:     height: 100%;
+23:     overflow: hidden;
+24:     background-color: var(--bg-dark);
+25:     font-family: var(--font-body);
+26:     color: #f8fafc;
+27:     user-select: none;
+28:     -webkit-user-select: none;
+29: }
+30: 
+31: #game-container {
+32:     position: relative;
+33:     width: 100vw;
+34:     height: 100vh;
+35:     display: flex;
+36:     justify-content: center;
+37:     align-items: center;
+38:     overflow: hidden;
+39: }
+40: 
+41: #c {
+42:     position: absolute;
+43:     top: 0;
+44:     left: 0;
+45:     width: 100%;
+46:     height: 100%;
+47:     display: block;
+48: }
+49: 
+50: /* =========================================
+51:    HUD SUPERIOR
+52:    ========================================= */
+53: .hud-overlay {
+54:     position: absolute;
+55:     top: 0;
+56:     left: 0;
+57:     width: 100%;
+58:     padding: 14px 24px;
+59:     display: flex;
+60:     justify-content: space-between;
+61:     align-items: center;
+62:     z-index: 15;
+63:     pointer-events: none;
+64:     background: linear-gradient(180deg, rgba(5, 8, 17, 0.85) 0%, rgba(5, 8, 17, 0) 100%);
+65: }
+66: 
+67: .hud-left, .hud-right {
+68:     display: flex;
+69:     gap: 12px;
+70:     align-items: center;
+71: }
+72: 
+73: .hud-card {
+74:     display: flex;
+75:     flex-direction: column;
+76:     padding: 6px 14px;
+77:     background: var(--glass-card);
+78:     border: 1px solid rgba(255, 255, 255, 0.12);
+79:     border-radius: 10px;
+80:     backdrop-filter: blur(10px);
+81:     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+82: }
+83: 
+84: .time-card {
+85:     border-color: rgba(255, 107, 0, 0.4);
+86: }
+87: 
+88: .time-card .hud-val {
+89:     color: var(--neon-orange);
+90:     text-shadow: 0 0 10px rgba(255, 107, 0, 0.7);
+91: }
+92: 
+93: .hud-label {
+94:     font-family: var(--font-heading);
+95:     font-size: 9px;
+96:     letter-spacing: 1.5px;
+97:     color: #94a3b8;
+98: }
+99: 
+100: .hud-val {
+101:     font-family: var(--font-heading);
+102:     font-size: 20px;
+103:     font-weight: 800;
+104:     color: #ffffff;
+105:     letter-spacing: 1px;
+106: }
+107: 
+108: .hud-val small {
+109:     font-size: 11px;
+110:     color: #94a3b8;
+111:     margin-left: 2px;
+112: }
+113: 
+114: .brand-badge {
+115:     font-family: var(--font-heading);
+116:     font-size: 12px;
+117:     letter-spacing: 3px;
+118:     padding: 5px 16px;
+119:     background: rgba(255, 107, 0, 0.15);
+120:     border: 1px solid var(--neon-orange);
+121:     border-radius: 20px;
+122:     color: var(--neon-orange);
+123:     text-shadow: 0 0 10px var(--neon-orange);
+124: }
+125: 
+126: .hud-btn-icon {
+127:     pointer-events: auto;
+128:     background: var(--glass-card);
+129:     border: 1px solid rgba(255, 255, 255, 0.2);
+130:     color: #fff;
+131:     width: 40px;
+132:     height: 40px;
+133:     border-radius: 10px;
+134:     cursor: pointer;
+135:     font-size: 16px;
+136:     display: flex;
+137:     align-items: center;
+138:     justify-content: center;
+139:     transition: all 0.2s;
+140: }
+141: 
+142: .hud-btn-icon:hover {
+143:     background: rgba(255, 107, 0, 0.25);
+144:     border-color: var(--neon-orange);
+145:     transform: scale(1.05);
+146: }
+147: 
+148: /* =========================================
+149:    PANTALLAS / MODALES (INICIO Y GAME OVER)
+150:    ========================================= */
+151: .ui-screen {
+152:     display: none;
+153:     position: absolute;
+154:     top: 0;
+155:     left: 0;
+156:     width: 100%;
+157:     height: 100%;
+158:     justify-content: center;
+159:     align-items: center;
+160:     z-index: 25;
+161:     background: rgba(5, 8, 17, 0.65);
+162:     backdrop-filter: blur(8px);
+163: }
+164: 
+165: .ui-screen.active {
+166:     display: flex;
+167: }
+168: 
+169: .glass-panel {
+170:     width: 92%;
+171:     max-width: 580px;
+172:     padding: 36px 32px;
+173:     background: var(--glass-card);
+174:     border: 2px solid var(--glass-border);
+175:     border-radius: 20px;
+176:     backdrop-filter: blur(20px);
+177:     box-shadow: 0 0 60px rgba(255, 107, 0, 0.2), inset 0 0 25px rgba(255, 107, 0, 0.08);
+178:     text-align: center;
+179:     animation: panelPop 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+180: }
+181: 
+182: @keyframes panelPop {
+183:     from {
+184:         opacity: 0;
+185:         transform: scale(0.92) translateY(20px);
+186:     }
+187:     to {
+188:         opacity: 1;
+189:         transform: scale(1) translateY(0);
+190:     }
+191: }
+192: 
+193: .tag-pill {
+194:     display: inline-block;
+195:     font-family: var(--font-heading);
+196:     font-size: 11px;
+197:     letter-spacing: 3px;
+198:     color: var(--neon-orange);
+199:     background: rgba(255, 107, 0, 0.12);
+200:     border: 1px solid var(--neon-orange);
+201:     padding: 4px 14px;
+202:     border-radius: 20px;
+203:     margin-bottom: 12px;
+204:     text-shadow: 0 0 8px var(--neon-orange);
+205: }
+206: 
+207: .main-heading {
+208:     font-family: var(--font-heading);
+209:     font-size: clamp(2rem, 6vw, 3rem);
+210:     font-weight: 900;
+211:     letter-spacing: 2px;
+212:     line-height: 1.1;
+213:     background: linear-gradient(135deg, #ffffff 0%, var(--neon-orange) 60%, var(--neon-yellow) 100%);
+214:     -webkit-background-clip: text;
+215:     -webkit-text-fill-color: transparent;
+216:     filter: drop-shadow(0 0 20px rgba(255, 107, 0, 0.5));
+217:     margin-bottom: 8px;
+218: }
+219: 
+220: .sub-heading {
+221:     font-size: 14px;
+222:     letter-spacing: 2px;
+223:     color: #94a3b8;
+224:     margin-bottom: 24px;
+225:     text-transform: uppercase;
+226: }
+227: 
+228: .controls-guide {
+229:     display: flex;
+230:     flex-direction: column;
+231:     gap: 10px;
+232:     margin-bottom: 28px;
+233:     text-align: left;
+234: }
+235: 
+236: .guide-item {
+237:     display: flex;
+238:     align-items: center;
+239:     gap: 14px;
+240:     background: rgba(255, 255, 255, 0.04);
+241:     border: 1px solid rgba(255, 255, 255, 0.08);
+242:     padding: 10px 16px;
+243:     border-radius: 12px;
+244: }
+245: 
+246: .key-icon {
+247:     font-family: var(--font-heading);
+248:     font-size: 13px;
+249:     font-weight: 800;
+250:     background: rgba(255, 107, 0, 0.15);
+251:     border: 1px solid var(--neon-orange);
+252:     color: var(--neon-orange);
+253:     padding: 4px 10px;
+254:     border-radius: 6px;
+255:     min-width: 60px;
+256:     text-align: center;
+257: }
+258: 
+259: .guide-desc strong {
+260:     display: block;
+261:     font-family: var(--font-heading);
+262:     font-size: 11px;
+263:     letter-spacing: 1px;
+264:     color: #ffffff;
+265: }
+266: 
+267: .guide-desc span {
+268:     font-size: 13px;
+269:     color: #94a3b8;
+270: }
+271: 
+272: /* =========================================
+273:    BOTONES
+274:    ========================================= */
+275: .btn-play-neon {
+276:     width: 100%;
+277:     padding: 16px 28px;
+278:     font-family: var(--font-heading);
+279:     font-size: 16px;
+280:     font-weight: 800;
+281:     letter-spacing: 2px;
+282:     color: #050811;
+283:     background: linear-gradient(135deg, var(--neon-orange) 0%, var(--neon-yellow) 100%);
+284:     border: none;
+285:     border-radius: 12px;
+286:     cursor: pointer;
+287:     box-shadow: 0 0 25px rgba(255, 107, 0, 0.5), inset 0 0 10px rgba(255, 255, 255, 0.5);
+288:     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+289:     display: flex;
+290:     justify-content: center;
+291:     align-items: center;
+292:     gap: 10px;
+293: }
+294: 
+295: .btn-play-neon:hover {
+296:     transform: translateY(-2px);
+297:     box-shadow: 0 0 35px rgba(255, 107, 0, 0.8), inset 0 0 15px rgba(255, 255, 255, 0.7);
+298: }
+299: 
+300: .btn-play-neon:active {
+301:     transform: scale(0.98);
+302: }
+303: 
+304: .btn-secondary-neon {
+305:     width: 100%;
+306:     padding: 14px 24px;
+307:     font-family: var(--font-heading);
+308:     font-size: 14px;
+309:     font-weight: 700;
+310:     letter-spacing: 1.5px;
+311:     color: #ffffff;
+312:     background: rgba(255, 255, 255, 0.08);
+313:     border: 1px solid rgba(255, 255, 255, 0.2);
+314:     border-radius: 12px;
+315:     cursor: pointer;
+316:     transition: all 0.2s;
+317:     display: flex;
+318:     justify-content: center;
+319:     align-items: center;
+320:     gap: 8px;
+321: }
+322: 
+323: .btn-secondary-neon:hover {
+324:     background: rgba(255, 255, 255, 0.16);
+325:     border-color: #ffffff;
+326: }
+327: 
+328: /* =========================================
+329:    PANTALLA GAME OVER
+330:    ========================================= */
+331: .gameover-panel {
+332:     border-color: rgba(255, 59, 48, 0.5);
+333:     box-shadow: 0 0 60px rgba(255, 59, 48, 0.25);
+334: }
+335: 
+336: .gameover-pill {
+337:     display: inline-block;
+338:     font-family: var(--font-heading);
+339:     font-size: 11px;
+340:     letter-spacing: 2px;
+341:     color: var(--neon-red);
+342:     background: rgba(255, 59, 48, 0.15);
+343:     border: 1px solid var(--neon-red);
+344:     padding: 4px 14px;
+345:     border-radius: 20px;
+346:     margin-bottom: 12px;
+347: }
+348: 
+349: .gameover-heading {
+350:     font-family: var(--font-heading);
+351:     font-size: clamp(2.2rem, 7vw, 3.2rem);
+352:     font-weight: 900;
+353:     color: #ffffff;
+354:     text-shadow: 0 0 25px var(--neon-red);
+355:     margin-bottom: 8px;
+356: }
+357: 
+358: .gameover-sub {
+359:     color: #94a3b8;
+360:     font-size: 14px;
+361:     margin-bottom: 24px;
+362: }
+363: 
+364: .scoreboard {
+365:     display: flex;
+366:     justify-content: space-around;
+367:     align-items: center;
+368:     background: rgba(0, 0, 0, 0.4);
+369:     border: 1px solid rgba(255, 255, 255, 0.08);
+370:     border-radius: 14px;
+371:     padding: 16px;
+372:     margin-bottom: 24px;
+373: }
+374: 
+375: .score-item {
+376:     display: flex;
+377:     flex-direction: column;
+378:     align-items: center;
+379:     gap: 4px;
+380: }
+381: 
+382: .score-label {
+383:     font-family: var(--font-heading);
+384:     font-size: 9px;
+385:     letter-spacing: 1px;
+386:     color: #94a3b8;
+387: }
+388: 
+389: .score-value {
+390:     font-family: var(--font-heading);
+391:     font-size: 22px;
+392:     font-weight: 900;
+393:     color: var(--neon-orange);
+394:     text-shadow: 0 0 10px rgba(255, 107, 0, 0.6);
+395: }
+396: 
+397: .score-separator {
+398:     width: 1px;
+399:     height: 40px;
+400:     background: rgba(255, 255, 255, 0.15);
+401: }
+402: 
+403: .button-stack {
+404:     display: flex;
+405:     flex-direction: column;
+406:     gap: 12px;
+407: }
+408: 
+409: /* =========================================
+410:    BOTÓN FLOTANTE TURBO (ESQUINA SUPERIOR DERECHA)
+411:    ========================================= */
+412: .mobile-corner-nitro {
+413:     position: absolute;
+414:     top: 72px;
+415:     right: 14px;
+416:     z-index: 22;
+417:     display: none;
+418:     align-items: center;
+419:     justify-content: center;
+420:     gap: 6px;
+421:     padding: 0 16px;
+422:     height: 44px;
+423:     border-radius: 22px;
+424:     background: radial-gradient(circle, #00f0ff 0%, #0284c7 100%);
+425:     border: 2px solid #38bdf8;
+426:     color: #ffffff;
+427:     font-family: var(--font-heading);
+428:     font-size: 13px;
+429:     font-weight: 900;
+430:     letter-spacing: 1.5px;
+431:     box-shadow: 0 0 20px rgba(0, 240, 255, 0.65);
+432:     cursor: pointer;
+433:     touch-action: manipulation;
+434:     user-select: none;
+435:     -webkit-user-select: none;
+436:     pointer-events: auto;
+437:     transition: transform 0.1s, box-shadow 0.1s;
+438: }
+439: 
+440: @media (max-width: 900px), (hover: none) and (pointer: coarse) {
+441:     .mobile-corner-nitro {
+442:         display: flex;
+443:     }
+444: }
+445: 
+446: .mobile-corner-nitro:active, .mobile-corner-nitro.active {
+447:     transform: scale(0.92);
+448:     box-shadow: 0 0 30px rgba(0, 240, 255, 0.95);
+449:     filter: brightness(1.25);
+450: }
+451: 
+452: /* =========================================
+453:    CONTROLES TÁCTILES PARA MÓVIL (ERGONÓMICOS)
+454:    ========================================= */
+455: .mobile-controls-layer {
+456:     position: absolute;
+457:     bottom: 16px;
+458:     left: 0;
+459:     width: 100%;
+460:     padding: 0 14px;
+461:     display: none;
+462:     justify-content: space-between;
+463:     align-items: flex-end;
+464:     z-index: 20;
+465:     pointer-events: none;
+466:     box-sizing: border-box;
+467: }
+468: 
+469: @media (max-width: 900px), (hover: none) and (pointer: coarse) {
+470:     .mobile-controls-layer {
+471:         display: flex;
+472:     }
+473: }
+474: 
+475: .steer-left-zone, .steer-right-zone {
+476:     display: flex;
+477:     gap: 10px;
+478:     pointer-events: auto;
+479:     align-items: center;
+480: }
+481: 
+482: .touch-btn {
+483:     background: rgba(10, 17, 36, 0.72);
+484:     border: 1.5px solid var(--neon-orange);
+485:     color: #ffffff;
+486:     font-family: var(--font-heading);
+487:     font-weight: 800;
+488:     border-radius: 16px;
+489:     display: flex;
+490:     align-items: center;
+491:     justify-content: center;
+492:     backdrop-filter: blur(8px);
+493:     box-shadow: 0 0 12px rgba(255, 107, 0, 0.25);
+494:     touch-action: manipulation;
+495:     user-select: none;
+496:     -webkit-user-select: none;
+497: }
+498: 
+499: .steer-btn {
+500:     width: 58px;
+501:     height: 58px;
+502:     font-size: 22px;
+503:     color: var(--neon-orange);
+504: }
+505: 
+506: .brake-btn {
+507:     padding: 0 14px;
+508:     min-width: 60px;
+509:     height: 56px;
+510:     font-size: 11px;
+511:     letter-spacing: 0.5px;
+512:     border-color: var(--neon-red);
+513:     box-shadow: 0 0 12px rgba(255, 59, 48, 0.25);
+514: }
+515: 
+516: .touch-btn:active {
+517:     transform: scale(0.93);
+518:     filter: brightness(1.2);
+519: }
+520: 
+521: /* Responsive HUD para pantallas de teléfono */
+522: @media (max-width: 768px) {
+523:     .hud-overlay {
+524:         padding: 8px 10px;
+525:     }
+526:     .brand-badge {
+527:         display: none; /* Dejar espacio libre en el centro */
+528:     }
+529:     .hud-left, .hud-right {
+530:         gap: 6px;
+531:     }
+532:     .hud-card {
+533:         padding: 4px 8px;
+534:         border-radius: 8px;
+535:     }
+536:     .hud-label {
+537:         font-size: 8px;
+538:         letter-spacing: 0.5px;
+539:     }
+540:     .hud-val {
+541:         font-size: 15px;
+542:     }
+543:     .hud-val small {
+544:         font-size: 9px;
+545:     }
+546:     .record-card {
+547:         display: none; /* Ocultar récord durante carrera para no desbordar en móvil */
+548:     }
+549:     .hud-btn-icon {
+550:         width: 34px;
+551:         height: 34px;
+552:         font-size: 14px;
+553:         border-radius: 8px;
+554:     }
+555: }
+556: 
+The above content shows the entire, complete file contents of the requested file.

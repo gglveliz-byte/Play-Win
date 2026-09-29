@@ -1,0 +1,68 @@
+Created At: 2026-09-28T13:53:59-05:00
+Completed At: 2026-09-28T13:53:59-05:00
+File Path: `file:///c:/Users/HP/OneDrive/Documentos/GitHub/Play%20Win/space/index.html`
+Total Lines: 192
+Total Bytes: 8744
+Showing lines 1 to 60
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: <!DOCTYPE html>
+2: <html lang="es">
+3: <head>
+4:     <meta charset="UTF-8">
+5:     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+6:     <title>Play Win - Fuerza Espacial</title>
+7:     <!-- Google Fonts modernas: Orbitron & Rajdhani -->
+8:     <link rel="preconnect" href="https://fonts.googleapis.com">
+9:     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+10:     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+11:     <link rel="stylesheet" href="style.css">
+12: </head>
+13: <body>
+14:     <div id="game-wrapper">
+15:         <canvas id="viewport"></canvas>
+16: 
+17:         <!-- HUD Superior durante el juego -->
+18:         <header id="game_hud" class="hud-overlay">
+19:             <div class="hud-left">
+20:                 <div class="hud-card">
+21:                     <span class="hud-label">PUNTOS</span>
+22:                     <span id="score" class="hud-val">0</span>
+23:                 </div>
+24:                 <div class="hud-card record-card">
+25:                     <span class="hud-label">RÉCORD</span>
+26:                     <span id="best_score" class="hud-val">0</span>
+27:                 </div>
+28:                 <div class="hud-card wave-card">
+29:                     <span class="hud-label">SECTOR</span>
+30:                     <span id="wave_display" class="hud-val">1</span>
+31:                 </div>
+32:                 <div class="hud-card speed-card" id="speed_card">
+33:                     <span class="hud-label">VELOCIDAD</span>
+34:                     <span id="speed_display" class="hud-val">1.0x</span>
+35:                 </div>
+36:             </div>
+37: 
+38:             <div class="hud-center">
+39:                 <div class="brand-badge">PLAY WIN</div>
+40:                 <div id="combo_badge" class="combo-pill">COMBO x2</div>
+41:             </div>
+42: 
+43:             <div class="hud-right">
+44:                 <div class="hud-card lives-card">
+45:                     <span class="hud-label">ESCUDOS</span>
+46:                     <div id="lives_container" class="lives-display">
+47:                         <span class="shield-pip active"></span>
+48:                         <span class="shield-pip active"></span>
+49:                         <span class="shield-pip active"></span>
+50:                     </div>
+51:                 </div>
+52:                 <button id="sound_toggle" class="hud-btn-icon" title="Sonido" aria-label="Alternar sonido">🔊</button>
+53:                 <button id="pause_toggle" class="hud-btn-icon" title="Pausar" aria-label="Pausar juego">⏸</button>
+54:             </div>
+55:         </header>
+56: 
+57:         <!-- Pantalla de Título e Inicio -->
+58:         <div id="screen_title" class="ui-screen active">
+59:             <div class="glass-panel">
+60:                 <div class="brand-pill">PLAY WIN ARCADE</div>
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

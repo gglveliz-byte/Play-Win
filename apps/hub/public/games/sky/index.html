@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Play Win - Sky Runner 3D 1v1</title>
+  
+  <!-- Tipografía Oficial Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+  
+  <!-- SDK Universal Play Win & Estilos de Juego -->
+  <link rel="stylesheet" href="/game-sdk/playwin-bridge.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-wrapper">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Controles Táctiles Inferiores para Móviles / Tablets -->
+    <div id="touch-controls" class="mobile-controls-layer">
+      <div class="steer-left-zone">
+        <button id="btn-touch-left" class="touch-btn steer-btn" aria-label="Izquierda">◀</button>
+      </div>
+
+      <div class="steer-right-zone">
+        <button id="btn-touch-jump" class="touch-btn jump-btn" aria-label="Saltar">▲ SALTO</button>
+        <button id="btn-touch-right" class="touch-btn steer-btn" aria-label="Derecha">▶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inyección del SDK Universal y Controlador Modular -->
+  <script src="/game-sdk/playwin-bridge.js"></script>
+  <script type="module" src="js/game.js"></script>
+</body>
+</html>
