@@ -1,0 +1,74 @@
+fix(sky): el empate ahora es un empate de verdad y el duelo no se cierra dos veces
+
+Dos bugs reportados por el usuario y confirmados con clientes reales.
+
+## BUG-046 - el empate se anunciaba pero repartia victoria y derrota
+
+Las capturas mostraban ¡VICTORIA! a uno y DERROTA al otro, con el mismo texto
+"Los dos cayeron a la vez con 3. Empate tecnico." en los dos.
+
+Verificado con dos clientes reales contra el servidor:
+
+  Resumen: "Los dos cayeron a la vez con 3. Empate tecnico."   <- decia EMPATE
+  Puntos A: {winnerSeasonPoints:100, loserSeasonPoints:20}
+  Puntos B: {winnerSeasonPoints:100, loserSeasonPoints:20}
+
+El servidor SABIA que era empate y lo escribia, pero seguia eligiendo a un ganador
+por posicion y repartiendo 100 puntos de victoria a uno y 20 al otro.
+
+Causa raiz en dos capas, ninguna sabia decir empate:
+  1. Servidor: resolverDobleCaida() ya devolvia empate:true, pero _resolverCaida()
+     ignoraba esa bandera y cerraba con ganador igualmente.
+  2. SDK: solo entendia isWin = winnerId === miId, asi que no habia forma de
+     mostrar un empate.
+
+Arreglo:
+  - Nuevo cerrarEnEmpate(): isDraw:true, winnerId:null, motivo DRAW y LOS MISMOS
+    50 puntos para los dos. Nadie cobra los 100 de victoria.
+  - El SDK detecta isDraw y muestra EMPATE con clase propia pw-result-draw.
+  - En el historial un empate se guarda con winner_id nulo (el esquema ya lo
+    admitia).
+
+## BUG-047 (CRITICO) - el duelo se cerraba DOS VECES
+
+La prueba de empate destapo dos MATCH_END para la misma partida:
+
+  [4065ms] <- MATCH_END · DRAW · ganador=null · "Empate tecnico."
+  [4411ms] <- MATCH_END · OPPONENT_CRASH · ganador=<el otro>
+
+Con la traza de pila se localizo el origen del segundo: Timeout._onTimeout, es
+decir el reloj de cortesia que debia haberse cancelado.
+
+Causa raiz: el orden de las operaciones estaba invertido.
+
+  ctx.broadcast(room.roomId, aviso);   // 1. se avisa
+  room.status = 'FINISHED';            // 2. y solo despues se cierra la sala
+
+Al avisar primero, el reloj pendiente encontraba la sala todavia en PLAYING,
+pasaba su comprobacion de seguridad y cerraba el duelo OTRA VEZ con otro ganador.
+El cliente recibia dos resultados contradictorios: es el "estado muerto" que
+reporto el usuario.
+
+Arreglo: nuevo cerrarSala() que marca la sala como terminada y cancela TODOS sus
+relojes (cortesia, fin y reloj maximo) ANTES de emitir el aviso.
+
+## test:empate (nuevo)
+
+Conecta dos clientes reales, los empareja, y ambos reportan su caida con 60ms de
+diferencia. Comprueba que los dos reciben MATCH_END, que llega isDraw, que no hay
+ganador, que los puntos son iguales y que nadie cobra los 100 de victoria.
+
+## Extraccion
+
+rooms.js habia crecido a 387 lineas. El cierre de duelos pasa a match-end.js
+(147 lineas): aviso a los dos jugadores y registro en el historial en un unico
+punto. rooms.js queda en 344 lineas.
+
+## Verificacion
+
+- 9/9 suites en verde, gobernanza 12/12
+- test:empate -> RESOLUCION CORRECTA (8 comprobaciones)
+- test:caidas -> regla de doble caida correcta
+- tamanos: rooms 344L, match-end 147L, bridge 480L (orquestador, techo 800),
+  css 342L, game.js 348L
+- Version de cache subida a v7

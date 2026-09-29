@@ -28,6 +28,7 @@
     "check:sdk": "node scripts/check-sdk-served.mjs",
     "check:dom": "node scripts/check-game-dom.mjs",
     "test:caidas": "node scripts/test-doble-caida.mjs",
+    "test:empate": "node --env-file=.env.test scripts/test-empate-real.mjs 3001",
     "test:sky": "node scripts/test-sky-determinism.mjs && node scripts/test-sky-shadow.mjs && node scripts/test-sky-win-condition.mjs && node scripts/test-sky-physics.mjs && node scripts/test-sky-render.mjs",
     "check:sky": "node scripts/check-sky-modules.mjs && node scripts/check-sky-served.mjs",
     "test:ghost": "node --env-file=.env.test apps/realtime-server/test/ghost-bot_spec.js",

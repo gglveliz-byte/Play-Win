@@ -7,6 +7,7 @@ import { buildGhostCallbacks } from './ghost-match.js';
 import { removeFromQueues, handleInMatchDisconnect } from './disconnect-handler.js';
 import { startMatchClock, cancelMatchClock, resumenPorTiempo, resolverDobleCaida, MOTIVO_TIEMPO_AGOTADO } from './match-clock.js';
 import { handlePlayerTick as procesarTick } from './tick-handler.js';
+import { cerrarEnEmpate, cerrarConGanador } from './match-end.js';
 
 /**
  * Ventana para escuchar la caída del rival antes de cerrar un duelo de
@@ -193,6 +194,16 @@ export class RoomManager {
     if (rival.cayoEn !== undefined) {
       // La regla vive en match-clock.js para poder probarla sin levantar el servidor.
       const r = resolverDobleCaida(room.playerA.username, room.playerA.cayoEn, room.playerB.username, room.playerB.cayoEn);
+
+      if (r.empate) {
+        // EMPATE REAL: si los dos aguantaron lo mismo, no hay ganador. Antes se
+        // elegía a uno por posición y se le daban los 100 puntos de victoria,
+        // mientras el resumen decía «empate técnico»: la interfaz mostraba
+        // ¡VICTORIA! a uno y DERROTA al otro. Incoherente e injusto.
+        this._finalizarEmpate(room, r.resumen);
+        return;
+      }
+
       const ganador = r.ganador === room.playerA.username ? room.playerA : room.playerB;
       const perdedor = ganador === room.playerA ? room.playerB : room.playerA;
       this._finalizarDuelo(room, ganador, perdedor, 'OPPONENT_CRASH', r.resumen, 100);
@@ -255,13 +266,9 @@ export class RoomManager {
     this._finalizarDuelo(room, ganador, perdedor, motivo, textoResumen(perdedor.username), puntosGanador);
   }
 
-  /** Cierra la sala y registra el resultado. Punto único de finalización. */
+  /** Cierra con un ganador. La lógica vive en match-end.js. */
   _finalizarDuelo(room, ganador, perdedor, motivo, resumen, puntosGanador) {
-    if (room.cortesiaTimer) clearTimeout(room.cortesiaTimer);
-    room.status = 'FINISHED';
-    cancelMatchClock(room);
-    if (room.ghostSimulation) room.ghostSimulation.stop();
-    this._finishMatch(room, ganador, perdedor, motivo, resumen, puntosGanador, 20);
+    cerrarConGanador(this._ctxCierre(), room, ganador, perdedor, motivo, resumen, puntosGanador);
   }
 
   /**
@@ -285,23 +292,24 @@ export class RoomManager {
     this.socketToRoom.delete(socket);
   }
 
-  _finishMatch(room, winner, loser, reason, summary, winPoints, losePoints) {
+  /** Dependencias que necesita match-end.js para cerrar un duelo. */
+  _ctxCierre() {
+    return {
+      broadcast: this._broadcastToRoom.bind(this),
+      matchService,
+      limpiar: (roomId, delayMs) => this._cleanupRoom(roomId, delayMs),
+    };
+  }
+
+  /** Cierra en EMPATE: sin ganador y con los mismos puntos para los dos. */
+  _finalizarEmpate(room, resumen) {
+    cerrarEnEmpate(this._ctxCierre(), room, resumen);
+  }
+
+  /** Cierra con un ganador sin limpiar el reloj. La lógica vive en match-end.js. */
+  _finishMatch(room, ganador, perdedor, motivo, resumen, puntosGanador) {
     if (room.ghostSimulation) room.ghostSimulation.stop();
-    this._broadcastToRoom(room.roomId, {
-      event: 'MATCH_END', winnerId: winner.id, loserId: loser.id, reason, summary,
-      payout: { winnerSeasonPoints: winPoints, loserSeasonPoints: losePoints },
-    });
-
-    matchService.recordMatch({
-      roomId: room.roomId, gameId: room.gameId,
-      player1Id: room.playerA.id, player2Id: room.playerB.id, winnerId: winner.id,
-      p1Score: room.playerA.score || 0, p2Score: room.playerB.score || 0, seed: room.seed,
-      finishReason: reason, durationMs: Date.now() - room.startedAt,
-      p1PointsDelta: winner.id === room.playerA.id ? winPoints : losePoints,
-      p2PointsDelta: room.isGhostMatch ? 0 : (winner.id === room.playerB.id ? winPoints : losePoints),
-    }).catch((err) => console.error('[RoomManager] recordMatch error:', err.message));
-
-    this._cleanupRoom(room.roomId, 6000);
+    cerrarConGanador(this._ctxCierre(), room, ganador, perdedor, motivo, resumen, puntosGanador);
   }
 
   _cleanupRoom(roomId, delayMs) {

@@ -133,13 +133,13 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ · ~~BUG-036~~ ✅ · ~~BUG-037~~ ✅ · ~~BUG-039~~ ✅ · ~~BUG-040~~ ✅ · ~~BUG-041~~ ✅ · ~~BUG-042~~ ✅ · ~~BUG-043~~ ✅ · ~~BUG-044~~ ✅ · ~~BUG-045~~ ✅ |
+| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ · ~~BUG-036~~ ✅ · ~~BUG-037~~ ✅ · ~~BUG-039~~ ✅ · ~~BUG-040~~ ✅ · ~~BUG-041~~ ✅ · ~~BUG-042~~ ✅ · ~~BUG-043~~ ✅ · ~~BUG-044~~ ✅ · ~~BUG-045~~ ✅ · ~~BUG-046~~ ✅ · ~~BUG-047~~ ✅ |
 | 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
 | 🟡 **Medio** | **2 abiertos** (BUG-028 · BUG-033) | ~~BUG-038~~ ✅ | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-033** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **42 de 44** | Todos menos BUG-028 y BUG-033 |
+| ✅ **Resueltos** | **44 de 46** | Todos menos BUG-028 y BUG-033 |
 
-> **Aritmética:** **44 bugs catalogados = 42 resueltos · 2 abiertos · 0 parciales.**
+> **Aritmética:** **46 bugs catalogados = 44 resueltos · 2 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
 >
 > **Los abiertos (BUG-028 y BUG-033) no son fallos de funcionamiento: son capas de UI**
@@ -210,6 +210,73 @@ servidor no reinicia nada: sería un botón muerto).
 **Verificación:** `check-game-dom.mjs space` → ✅ 32/32 sin ausencias · protocolo real del
 juego completo (`MATCH_WAITING → MATCH_START → MATCH_LIVE → RIVAL_TICK`) · el SDK entrega
 `onMatchReady → onMatchLive`.
+
+---
+
+### 🔴 BUG-046 · El empate se anunciaba como tal pero repartía victoria y derrota
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Alto** (resultado injusto y mensaje contradictorio en pantalla) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/realtime-server/src/match-end.js` · `packages/game-sdk/playwin-bridge.js` |
+
+**Síntoma reportado:** *"cuando ambos pierden a la misma vez no sé por qué marca a uno como ganador, cuando puede ser empate, ¿no crees?"*. Las capturas mostraban **¡VICTORIA!** a un jugador y **DERROTA** al otro, con el mismo texto *"Los dos cayeron a la vez con 3. Empate técnico."* en ambos.
+
+**Verificado con dos clientes reales contra el servidor:**
+
+```
+Resumen: "Los dos cayeron a la vez con 3. Empate técnico."   <- decía EMPATE
+Puntos A: {"winnerSeasonPoints":100,"loserSeasonPoints":20}
+Puntos B: {"winnerSeasonPoints":100,"loserSeasonPoints":20}
+```
+
+El servidor **sabía** que era empate y lo escribía en el resumen, pero **seguía eligiendo a un ganador por posición** y repartiendo 100 puntos de victoria a uno y 20 al otro.
+
+**Causa raíz — dos capas, ninguna sabía decir «empate»:**
+
+1. **Servidor:** `resolverDobleCaida()` ya devolvía `empate: true`, pero `_resolverCaida()` **ignoraba esa bandera** y cerraba con ganador igualmente.
+2. **SDK:** sólo entendía `isWin = winnerId === miId`, así que **no existía forma de mostrar un empate**. Uno veía ¡VICTORIA! y el otro DERROTA.
+
+**Arreglo:**
+
+* Nuevo `cerrarEnEmpate()`: aviso con **`isDraw: true`**, **`winnerId: null`**, motivo `DRAW` y **los mismos 50 puntos para los dos** (nadie cobra los 100 de victoria).
+* El SDK detecta `isDraw` y muestra **EMPATE** con clase propia `pw-result-draw`, más los puntos reales.
+* En el historial un empate se guarda con **`winner_id` nulo**, que el esquema ya admitía.
+
+---
+
+### 🔴 BUG-047 · El duelo se cerraba DOS VECES: llegaba un segundo resultado con otro ganador
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (el juego quedaba en un estado inconsistente) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/realtime-server/src/match-end.js` · `cerrarSala()` |
+
+**Síntoma reportado:** *"al volver a perder al mismo tiempo después se queda muerto el juego, en un estado como que nadie perdió"*.
+
+**Cómo se encontró:** la prueba de empate pasó a mostrar **dos `MATCH_END`** para la misma partida:
+
+```
+[4065ms] <- MATCH_END · motivo=DRAW · ganador=null · "Empate técnico."
+[4411ms] <- MATCH_END · motivo=OPPONENT_CRASH · ganador=<el otro> · "cayó al abismo."
+```
+
+Con la traza de pila se localizó el origen del segundo aviso: **`Timeout._onTimeout`**, es decir el **reloj de cortesía** que debía haberse cancelado.
+
+**Causa raíz — el orden de las operaciones estaba invertido:**
+
+```javascript
+ctx.broadcast(room.roomId, aviso);   // 1. se avisa…
+room.status = 'FINISHED';             // 2. …y sólo después se cierra la sala
+```
+
+Al avisar primero, el reloj de cortesía pendiente encontraba la sala **todavía en `PLAYING`**, pasaba su comprobación de seguridad y **cerraba el duelo una segunda vez** con otro ganador. El cliente recibía dos resultados contradictorios.
+
+**Arreglo:** nuevo `cerrarSala()` que **marca la sala como terminada y cancela TODOS sus relojes**
+(cortesía, fin y reloj máximo) **antes** de emitir el aviso. La sonda confirma ahora **un único
+`MATCH_END`**.
 
 ---
 

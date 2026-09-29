@@ -5,7 +5,7 @@
   'use strict';
   // Versión de la API del SDK. Debe coincidir con la de playwin-bridge-connection.js
   // y con el ?v= que llevan las etiquetas <script> de los juegos.
-  const SDK_VERSION = 6;
+  const SDK_VERSION = 7;
   let WS_URL = window.PLAYWIN_WS_URL || 'ws://localhost:3001/ws';
   const isInIframe = window.parent && window.parent !== window;
 
@@ -368,20 +368,35 @@
     if (pingTimer) clearInterval(pingTimer);
     hideReconnectBanner();
     document.getElementById('pw-live-hud').classList.remove('active');
-    const isWin = msg.winnerId === currentPlayer.id;
+
+    // Un duelo puede terminar en EMPATE (los dos aguantaron lo mismo). Antes el
+    // SDK sólo sabía ganar o perder, así que enseñaba ¡VICTORIA! a uno y DERROTA
+    // al otro aunque el resumen dijera «empate técnico». Ahora se muestra EMPATE
+    // y los puntos que da el servidor, que son los mismos para los dos.
+    const isDraw = msg.isDraw === true || msg.reason === 'DRAW';
+    const isWin = !isDraw && msg.winnerId === currentPlayer.id;
+
     const banner = document.getElementById('pw-res-banner');
-    banner.textContent = isWin ? '¡VICTORIA!' : 'DERROTA';
-    banner.className = `pw-result-banner ${isWin ? 'pw-result-win' : 'pw-result-loss'}`;
-    document.getElementById('pw-res-summary').textContent = msg.summary || (isWin ? 'Has superado a tu oponente.' : 'Te has estrellado.');
-    document.getElementById('pw-res-points').textContent = isWin
-      ? `+${msg.payout.winnerSeasonPoints} PUNTOS DE TEMPORADA`
-      : `+${msg.payout.loserSeasonPoints} PUNTOS DE CONSOLACIÓN`;
+    banner.textContent = isDraw ? 'EMPATE' : isWin ? '¡VICTORIA!' : 'DERROTA';
+    banner.className = `pw-result-banner ${isDraw ? 'pw-result-draw' : isWin ? 'pw-result-win' : 'pw-result-loss'}`;
+
+    document.getElementById('pw-res-summary').textContent = msg.summary
+      || (isDraw ? 'Ninguno de los dos cedió.' : isWin ? 'Has superado a tu oponente.' : 'Te has estrellado.');
+
+    const puntos = isDraw ? msg.payout.winnerSeasonPoints
+      : isWin ? msg.payout.winnerSeasonPoints
+        : msg.payout.loserSeasonPoints;
+    document.getElementById('pw-res-points').textContent = isDraw
+      ? `+${puntos} PUNTOS DE TEMPORADA (EMPATE)`
+      : isWin
+        ? `+${puntos} PUNTOS DE TEMPORADA`
+        : `+${puntos} PUNTOS DE CONSOLACIÓN`;
 
     showScreen('pw-screen-result');
     if (isInIframe) {
-      window.parent.postMessage({ type: 'PLAYWIN_MATCH_COMPLETED', winnerId: msg.winnerId, isWin, payout: msg.payout }, '*');
+      window.parent.postMessage({ type: 'PLAYWIN_MATCH_COMPLETED', winnerId: msg.winnerId, isWin, isDraw, payout: msg.payout }, '*');
     }
-    invokeCallback('onMatchEnd', { isWin, payout: msg.payout });
+    invokeCallback('onMatchEnd', { isWin, isDraw, payout: msg.payout });
   }
 
   function updateHudOpponentScore(oppScore) {

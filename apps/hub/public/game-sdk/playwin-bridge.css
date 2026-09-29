@@ -304,19 +304,12 @@
   border-color: var(--pw-ink);
 }
 
-/* Pantalla de Resultados */
-.pw-result-banner {
-  font-size: 40px;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  margin-bottom: 8px;
-}
-.pw-result-win {
-  color: var(--pw-orange);
-}
-.pw-result-loss {
-  color: var(--pw-ink-soft);
-}
+/* Pantalla de Resultados. Cada desenlace tiene su color: naranja victoria, tinta
+   suave derrota y apagado el EMPATE (ni una cosa ni la otra). */
+.pw-result-banner { font-size: 40px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 8px; }
+.pw-result-win { color: var(--pw-orange); }
+.pw-result-loss { color: var(--pw-ink-soft); }
+.pw-result-draw { color: var(--pw-mute); }
 .pw-points-pill {
   display: inline-flex;
   align-items: center;

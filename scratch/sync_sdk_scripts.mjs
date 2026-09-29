@@ -22,7 +22,7 @@ const BRIDGE = 'playwin-bridge.js';
  * ejecuta código que ya no existe en el repositorio. Costó una sesión entera de
  * depuración descubrirlo, así que la versión va en la URL de los 4 scripts.
  */
-const VERSION = '6';
+const VERSION = '7';
 const Q = `?v=${VERSION}`;
 const TAG_BRIDGE = `<script src="/game-sdk/${BRIDGE}"></script>`;
 let juegosTocados = 0;
