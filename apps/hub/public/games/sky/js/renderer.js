@@ -190,12 +190,17 @@ export function drawRivalGhost(ctx, rival, playerX, playerZ, canvasWidth, canvas
   // de que la "sombrita azul" no se viera nunca.
   if (dz <= 0.05 || dz >= 44) return;
 
-  // Como los dos van al mismo nivel, se solapan en el centro. Cuanto más cerca
-  // está el rival, más transparente se dibuja: así siempre se distinguen los dos
-  // en lugar de taparse.
+  // Como los dos van al mismo nivel se solapan en el centro. Cuanto más cerca
+  // está el rival, más transparente se dibuja Y más se desplaza de lado: con la
+  // opacidad sola no bastaba, porque al ir exactamente al mismo nivel las dos
+  // bolas caían en EL MISMO PÍXEL y se fundían en un borrón. El desplazamiento
+  // lateral las mantiene al mismo NIVEL (que es lo que importa en este juego)
+  // pero visibles por separado.
   const cercania = Math.max(0, 1 - Math.abs(dz - cameraInFront) / 6);
+  const desplazamientoLateral = cercania * 42;
   ctx.save();
-  ctx.globalAlpha = 0.85 - cercania * 0.45;
+  ctx.globalAlpha = 0.85 - cercania * 0.35;
+  ctx.translate(desplazamientoLateral, 0);
 
   if (rival.isAlive) {
     const [rsx, rsy, rscale] = project(rival.x, 0, dz, canvasWidth, canvasHeight, isPortrait, playerX, playerZ);
