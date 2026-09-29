@@ -12,17 +12,20 @@ const PORT = process.env.PORT || 3001;
 /**
  * Configuración de los RIVALES DE DIVISIÓN (Ghost Bots).
  *
- * Un ghost bot solo aparece cuando un jugador REAL lleva esperando en la cola
- * más de `GHOST_BOT_DELAY_MS`. Sirve para que nadie se quede mirando el radar
- * indefinidamente, pero un valor demasiado bajo impide que dos personas se
- * encuentren: con 3.5s, si un amigo entra 4 segundos después que tú, tú ya estás
- * en una partida contra un bot y no os emparejaréis.
+ * 🔴 POR DEFECTO ESTÁN DESACTIVADOS. Solo entran si se pide explícitamente:
  *
- * Variables de entorno:
- *   GHOST_BOTS_ENABLED=false   → desactiva los bots por completo (solo PvP real)
- *   GHOST_BOT_DELAY_MS=15000   → cuánto esperar antes de recurrir a un bot
+ *   GHOST_BOTS_ENABLED=true npm run dev:realtime     (o $env:GHOST_BOTS_ENABLED='true')
+ *
+ * Motivo: un bot solo aparecía tras unos segundos de espera y el jugador no
+ * sabía que su rival no era una persona. Mientras se valida el emparejamiento
+ * real entre humanos, es preferible que nadie juegue contra relleno sin saberlo.
+ *
+ * Con los bots apagados, un jugador sin rival humano se queda esperando en el
+ * radar (indefinidamente). Es el comportamiento deseado para probar PvP real.
+ *
+ * GHOST_BOT_DELAY_MS solo aplica cuando los bots están encendidos.
  */
-const GHOST_BOTS_ENABLED = process.env.GHOST_BOTS_ENABLED !== 'false';
+const GHOST_BOTS_ENABLED = process.env.GHOST_BOTS_ENABLED === 'true';
 const GHOST_BOT_DELAY_MS = Number(process.env.GHOST_BOT_DELAY_MS) || GHOST_MATCH_TIMEOUT_MS;
 
 const roomManager = new RoomManager({
