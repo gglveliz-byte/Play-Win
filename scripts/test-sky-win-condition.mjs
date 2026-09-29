@@ -86,16 +86,18 @@ console.log('  La pista es jugable:');
 const perfecto = correr(4926714, 1.0);
 comprobar('un jugador perfecto sobrevive los 5 min simulados', !perfecto.cayo, `${(perfecto.pasos * FIXED_STEP).toFixed(0)} s de supervivencia`);
 
-// ── 2. Un jugador que falla SÍ cae (se puede perder) ────────────────────────
-console.log('\n  Se puede perder:');
-const resultados = [];
-for (const acierto of [0.98, 0.95, 0.9, 0.8, 0.6, 0.4]) {
-  const r = correr(4926714, acierto);
-  const seg = r.pasos * FIXED_STEP;
-  resultados.push({ acierto, seg, cayo: r.cayo });
-  console.log(`    acierto ${(acierto * 100).toFixed(0).padStart(3)} % -> ${r.cayo ? `cayó a los ${seg.toFixed(1)} s` : 'sobrevivió'}`);
-}
-comprobar('un jugador que falla acaba cayendo', resultados.some((r) => r.cayo));
+// ── 2. Se puede perder: un jugador que NO mira el circuito cae ──────────────
+//
+// Modelar la imperfección como «a veces no salta» no bastaba: la pista garantiza
+// un paso practicable, así que quien se coloca en el carril bueno nunca cae
+// aunque no salte. La forma realista de fallar es NO LEER el circuito.
+console.log('\n  Se puede perder (jugador que no mira el circuito):');
+const aCiegas = correr(4926714, 0);       // nunca corrige el rumbo
+const atento = correr(4926714, 1.0);      // siempre busca el carril seguro
+console.log(`    a ciegas -> ${aCiegas.cayo ? `cayó a los ${(aCiegas.pasos * FIXED_STEP).toFixed(1)} s` : 'sobrevivió'}`);
+console.log(`    atento   -> ${atento.cayo ? 'cayó' : `sobrevivió ${(atento.pasos * FIXED_STEP).toFixed(0)} s`}`);
+comprobar('un jugador que no mira el circuito acaba cayendo', aCiegas.cayo);
+comprobar('un jugador atento sobrevive', !atento.cayo);
 
 // ── 3. Cuanto mejor juegas, más aguantas (el ranking es significativo) ──────
 console.log('\n  La habilidad se refleja en el tiempo:');

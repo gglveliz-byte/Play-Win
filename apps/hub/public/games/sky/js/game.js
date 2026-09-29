@@ -13,6 +13,7 @@ import {
   drawRivalGhost,
   cameraInFront,
 } from './renderer.js';
+import { pasoDeFisica } from './physics.js';
 
 // ==================================================================
 // GEOMETRÍA DE LA PISTA (una sola fuente de verdad)
@@ -79,6 +80,9 @@ let touchDriving = false;
 let touchSteer = 0;
 let keyLeft = false;
 let keyRight = false;
+// Desplazamiento suave del encuadre antes de la partida: da vida a la vista
+// previa sin simular que el jugador avanza por el circuito.
+let vistaPrevia = 0;
 
 const stars = initStars(70);
 const trackManager = new TrackManager(123456);
@@ -192,78 +196,39 @@ function setupControls() {
   });
 }
 
+/**
+ * Avanza la simulación un paso.
+ *
+ * El cálculo vive en `physics.js`: aquí sólo se le pasa el estado y se recogen
+ * los cambios. Mantener las variables de módulo evita reescribir todo el archivo
+ * y el coste es copiar unos números 60 veces por segundo: despreciable.
+ */
 function updatePhysics() {
-  if (gameState === STATE_IDLE || gameState === STATE_READY) {
-    z += 0.12;
-    x = Math.sin(Date.now() * 0.002) * 0.25;
-    y = 0;
-    return;
-  }
+  const estado = {
+    gameState, x, y, z, vy, steerInput, jumpHeld, jumpBufferTimer,
+    touchDriving, touchSteer, keyLeft, keyRight, vistaPrevia, pasosVivo, puntuacion,
+    Clamp, Lerp,
+  };
 
-  if (gameState === STATE_PLAYING) {
-    // Sky Runner es un juego de SUPERVIVENCIA: los dos jugadores avanzan al mismo
-    // ritmo, así que la puntuación NO puede ser la distancia (sería idéntica para
-    // los dos y nadie podría ganar nunca). Lo que se puntúa es el TIEMPO que
-    // aguantas sin caer al abismo: quien cae primero pierde.
-    //
-    // (En carreras la puntuación sí es la distancia: allí el avance depende del
-    // jugador. Cada juego mide lo suyo.)
-    pasosVivo++;
-    puntuacion = Math.floor(pasosVivo / 60);   // el bucle va a 60 pasos por segundo
+  pasoDeFisica(estado, {
+    limiteX: LIMITE_X,
+    carrilDe,
+    trackManager,
+    audio: audioSys,
+    alCaer: () => window.PlayWin?.notifyCrash(),
+  });
 
-    if (keyLeft) steerInput = Lerp(0.28, steerInput, -1);
-    else if (keyRight) steerInput = Lerp(0.28, steerInput, 1);
-    else if (touchDriving) steerInput = Lerp(0.35, steerInput, touchSteer);
-    else steerInput = Lerp(0.32, steerInput, 0);
-
-    x += steerInput * 0.11;
-    x = Clamp(x, -LIMITE_X, LIMITE_X);
-
-    if (jumpBufferTimer > 0) jumpBufferTimer--;
-    y += (vy -= 0.006);
-    z += Math.min(0.5, 0.2 + z / 5000);
-
-    const currentRowIdx = (z + cameraInFront) | 0;
-    const currentColIdx = carrilDe(x);
-    const row = trackManager.getRow(currentRowIdx);
-    const isOverTrack = row && row[currentColIdx];
-
-    if (y <= 0.05 && y >= -0.35 && isOverTrack) {
-      if (jumpBufferTimer > 0 || jumpHeld) {
-        y = 0.06;
-        vy = 0.12;
-        jumpBufferTimer = 0;
-        audioSys.playJump();
-      } else {
-        y = 0;
-        vy = 0;
-      }
-    }
-
-    if (y <= -4) {
-      // `notifyCrash()` sólo avisa si la partida sigue viva. Si el rival se
-      // estrelló primero, el servidor ya cerró el duelo y este aviso se descarta
-      // (correcto: no se puede perder dos veces). El servidor resuelve igual por
-      // 'OPPONENT_CRASH', así que el jugador recibe su resultado.
-      gameState = STATE_CRASHED;
-      audioSys.playGameOver();
-      window.PlayWin?.notifyCrash();
-    }
-
-    trackManager.cleanup((z - 25) | 0);
-  } else if (gameState === STATE_CRASHED) {
-    if (y > -15) y += (vy -= 0.006);
-  }
+  // Devuelve los valores al módulo.
+  ({ x, y, z, vy, steerInput, jumpHeld, jumpBufferTimer, touchDriving,
+     touchSteer, keyLeft, keyRight, vistaPrevia, pasosVivo, puntuacion, gameState } = estado);
+}
 }
 
 /**
  * Deja el escenario listo para la siguiente partida.
  *
- * Se llama al terminar el duelo. ANTES, `onMatchEnd` sólo ponía `STATE_IDLE`, y
- * ese estado sigue avanzando la pista indefinidamente (`z += 0.12`), así que tras
- * morir el jugador veía el escenario desplazarse para siempre sin ningún final:
- * parecía que el juego se había quedado colgado. Además el rival fantasma seguía
- * conectado y se dibujaba con datos ya muertos.
+ * Se llama al terminar el duelo. Antes `onMatchEnd` sólo volvía a IDLE, y el
+ * rival fantasma seguía "conectado" dibujándose con datos ya muertos.
  */
 function endMatch() {
   gameState = STATE_IDLE;
@@ -295,15 +260,23 @@ function gameLoop(timeMS = 0) {
   }
 
   const opp = window.PlayWin?.getOpponentState();
-  if (opp && rival.connected) {
+  // El rival sólo existe DURANTE la partida. Antes, `rival.connected` seguía en
+  // true después de terminar un duelo y el fantasma se dibujaba con datos ya
+  // muertos, lo que contribuía a que la pantalla pareciera congelada.
+  const enPartida = gameState === STATE_PLAYING || gameState === STATE_CRASHED;
+  if (opp && rival.connected && enPartida) {
     rival.x = Lerp(0.22, rival.x, opp.x || 0);
     rival.z = Lerp(0.28, rival.z, opp.y || 0);
     rival.isAlive = opp.isAlive ?? true;
   }
 
+  // La cámara se queda donde está hasta que arranca la partida; `vistaPrevia`
+  // sólo añade un balanceo suave para que la vista previa no parezca muerta.
+  const camaraX = x + vistaPrevia;
+
   drawSkyAndStars(ctx, stars, canvasWidth, canvasHeight, z);
-  drawTrack(ctx, trackManager, x, z, canvasWidth, canvasHeight, isPortrait);
-  drawRivalGhost(ctx, rival, x, z, canvasWidth, canvasHeight, isPortrait);
+  drawTrack(ctx, trackManager, camaraX, z, canvasWidth, canvasHeight, isPortrait);
+  if (enPartida) drawRivalGhost(ctx, rival, camaraX, z, canvasWidth, canvasHeight, isPortrait);
 
   const currentRowIdx = (z + cameraInFront) | 0;
   const currentColIdx = carrilDe(x);

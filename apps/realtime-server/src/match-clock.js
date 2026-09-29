@@ -55,3 +55,40 @@ export function cancelMatchClock(room) {
 export function resumenPorTiempo(ganador, marca) {
   return `Se agotó el tiempo del duelo: ${ganador} iba por delante con ${marca}.`;
 }
+
+/**
+ * Decide quién gana cuando caen los DOS jugadores en un juego de supervivencia.
+ *
+ * En Sky Runner la puntuación es el **tiempo sobrevivido**, así que gana quien
+ * aguantó más. Este caso importa: los dos jugadores recorren el mismo circuito
+ * determinista, así que caer a la vez es habitual, y antes el duelo se cerraba
+ * con el primer aviso dejando al otro sin resultado.
+ *
+ * @param {string} nombreA Jugador A.
+ * @param {number} tiempoA Tiempo sobrevivido por A.
+ * @param {string} nombreB Jugador B.
+ * @param {number} tiempoB Tiempo sobrevivido por B.
+ * @returns {{ganador: string, perdedor: string, empate: boolean, resumen: string}}
+ */
+export function resolverDobleCaida(nombreA, tiempoA, nombreB, tiempoB) {
+  if (tiempoA === tiempoB) {
+    // Empate exacto: no se inventa un mérito que no existe.
+    return {
+      ganador: nombreA,
+      perdedor: nombreB,
+      empate: true,
+      resumen: `Los dos cayeron a la vez con ${tiempoA}. Empate técnico.`,
+    };
+  }
+
+  const ganaA = tiempoA > tiempoB;
+  const tGanador = ganaA ? tiempoA : tiempoB;
+  const tPerdedor = ganaA ? tiempoB : tiempoA;
+
+  return {
+    ganador: ganaA ? nombreA : nombreB,
+    perdedor: ganaA ? nombreB : nombreA,
+    empate: false,
+    resumen: `${ganaA ? nombreB : nombreA} cayó antes: aguantó ${tPerdedor} frente a ${tGanador}.`,
+  };
+}

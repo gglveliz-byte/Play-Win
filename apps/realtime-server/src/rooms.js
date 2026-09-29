@@ -5,8 +5,15 @@ import { createDuelRoom, createGhostRoom } from './room-factory.js';
 import { buildStatusSnapshot } from './room-status.js';
 import { buildGhostCallbacks } from './ghost-match.js';
 import { removeFromQueues, handleInMatchDisconnect } from './disconnect-handler.js';
-import { startMatchClock, cancelMatchClock, resumenPorTiempo, MOTIVO_TIEMPO_AGOTADO } from './match-clock.js';
+import { startMatchClock, cancelMatchClock, resumenPorTiempo, resolverDobleCaida, MOTIVO_TIEMPO_AGOTADO } from './match-clock.js';
 import { handlePlayerTick as procesarTick } from './tick-handler.js';
+
+/**
+ * Ventana para escuchar la caída del rival antes de cerrar un duelo de
+ * supervivencia. Si los dos caen casi a la vez, ambos avisos llegan dentro de
+ * este plazo y se puede comparar quién aguantó más en lugar de decidir por azar.
+ */
+const VENTANA_CAIDA_MS = 400;
 
 /**
  * Gestor de salas 1v1 y árbitro en tiempo real con Anti-Cheat (< 350 líneas)
@@ -160,11 +167,45 @@ export class RoomManager {
     }
 
     // En los juegos de supervivencia (Sky Runner), quien cae pierde.
+    this._resolverCaida(room, socket);
+  }
+
+  /**
+   * Resuelve la caída de un jugador en un juego de supervivencia.
+   *
+   * Regla del juego: **gana quien NO cae al abismo**. El caso delicado es que
+   * los dos caigan casi a la vez: antes el duelo se cerraba con el primer aviso,
+   * el segundo se descartaba (el jugador se quedaba sin resultado) y el ganador
+   * salía por azar. Ahora se escucha también al rival y, si cae dentro de la
+   * ventana, gana **quien aguantó más tiempo**.
+   *
+   * @param {object} room Sala del duelo.
+   * @param {any} socket Socket del jugador que acaba de caer.
+   */
+  _resolverCaida(room, socket) {
+    const esA = socket === room.playerA.socket;
+    const caido = esA ? room.playerA : room.playerB;
+    const rival = esA ? room.playerB : room.playerA;
+
+    // `score` es el tiempo sobrevivido según los ticks VALIDADOS por el servidor.
+    caido.cayoEn = caido.score || 0;
+
+    if (rival.cayoEn !== undefined) {
+      // La regla vive en match-clock.js para poder probarla sin levantar el servidor.
+      const r = resolverDobleCaida(room.playerA.username, room.playerA.cayoEn, room.playerB.username, room.playerB.cayoEn);
+      const ganador = r.ganador === room.playerA.username ? room.playerA : room.playerB;
+      const perdedor = ganador === room.playerA ? room.playerB : room.playerA;
+      this._finalizarDuelo(room, ganador, perdedor, 'OPPONENT_CRASH', r.resumen, 100);
+      return;
+    }
+
+    // Todavía no sabemos si el rival también cae: se le da un instante.
     this._cerrarDandoVictoriaAlRival(
       socket,
       'OPPONENT_CRASH',
       (nombre) => `${nombre} cayó al abismo.`,
-      100
+      100,
+      VENTANA_CAIDA_MS
     );
   }
 
@@ -179,14 +220,17 @@ export class RoomManager {
 
   /**
    * Cierra el duelo dando la victoria al rival del socket indicado.
-   * Se usa cuando un jugador se rinde o cuando comete una infracción grave.
+   * Se usa cuando un jugador se rinde, comete una infracción grave o cae al
+   * abismo sin que el rival caiga también.
    *
    * @param {any} socket Socket del jugador que abandona.
    * @param {string} motivo Código que se guarda en el historial.
    * @param {(username: string) => string} textoResumen Texto explicativo.
    * @param {number} puntosGanador Puntos de temporada para el ganador.
+   * @param {number} [cortesiaMs] Espera antes de cerrar, para dar tiempo a que
+   *   llegue el aviso del rival (ver la ventana de cortesía más abajo).
    */
-  _cerrarDandoVictoriaAlRival(socket, motivo, textoResumen, puntosGanador) {
+  _cerrarDandoVictoriaAlRival(socket, motivo, textoResumen, puntosGanador, cortesiaMs = 0) {
     const roomId = this.socketToRoom.get(socket);
     const room = roomId ? this.rooms.get(roomId) : null;
     if (!room || room.status !== 'PLAYING') return;
@@ -194,10 +238,30 @@ export class RoomManager {
     const isA = socket === room.playerA.socket;
     const [perdedor, ganador] = isA ? [room.playerA, room.playerB] : [room.playerB, room.playerA];
 
+    // VENTANA DE CORTESÍA: el aviso del rival llega milisegundos después. Sin
+    // esta espera, la segunda caída se descartaba por «partida ya terminada»: el
+    // jugador se quedaba sin resultado en pantalla y el ganador salía por azar.
+    if (cortesiaMs > 0) {
+      const marca = { perdedor, ganador };
+      if (room.cortesiaTimer) clearTimeout(room.cortesiaTimer);
+      room.cortesiaTimer = setTimeout(() => {
+        const actual = this.rooms.get(room.roomId);
+        if (!actual || actual.status !== 'PLAYING') return;   // ya se cerró con las dos caídas
+        this._finalizarDuelo(actual, marca.ganador, marca.perdedor, motivo, textoResumen(marca.perdedor.username), puntosGanador);
+      }, cortesiaMs);
+      return;
+    }
+
+    this._finalizarDuelo(room, ganador, perdedor, motivo, textoResumen(perdedor.username), puntosGanador);
+  }
+
+  /** Cierra la sala y registra el resultado. Punto único de finalización. */
+  _finalizarDuelo(room, ganador, perdedor, motivo, resumen, puntosGanador) {
+    if (room.cortesiaTimer) clearTimeout(room.cortesiaTimer);
     room.status = 'FINISHED';
     cancelMatchClock(room);
     if (room.ghostSimulation) room.ghostSimulation.stop();
-    this._finishMatch(room, ganador, perdedor, motivo, textoResumen(perdedor.username), puntosGanador, 20);
+    this._finishMatch(room, ganador, perdedor, motivo, resumen, puntosGanador, 20);
   }
 
   /**

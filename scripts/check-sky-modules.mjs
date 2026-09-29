@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const DIR = 'apps/hub/public/games/sky';
-const MODULOS = ['js/game.js', 'js/renderer.js', 'js/prng.js', 'js/audio.js'];
+const MODULOS = ['js/game.js', 'js/renderer.js', 'js/prng.js', 'js/audio.js', 'js/physics.js'];
 
 console.log('\n═══ INTEGRIDAD DE MÓDULOS · SKY RUNNER 3D ═══\n');
 

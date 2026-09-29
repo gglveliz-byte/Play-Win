@@ -133,13 +133,13 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ · ~~BUG-036~~ ✅ · ~~BUG-037~~ ✅ · ~~BUG-039~~ ✅ · ~~BUG-040~~ ✅ · ~~BUG-041~~ ✅ |
+| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ · ~~BUG-036~~ ✅ · ~~BUG-037~~ ✅ · ~~BUG-039~~ ✅ · ~~BUG-040~~ ✅ · ~~BUG-041~~ ✅ · ~~BUG-042~~ ✅ · ~~BUG-043~~ ✅ · ~~BUG-044~~ ✅ |
 | 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
 | 🟡 **Medio** | **2 abiertos** (BUG-028 · BUG-033) | ~~BUG-038~~ ✅ | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-033** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **38 de 40** | Todos menos BUG-028 y BUG-033 |
+| ✅ **Resueltos** | **41 de 43** | Todos menos BUG-028 y BUG-033 |
 
-> **Aritmética:** **40 bugs catalogados = 38 resueltos · 2 abiertos · 0 parciales.**
+> **Aritmética:** **43 bugs catalogados = 41 resueltos · 2 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
 >
 > **Los abiertos (BUG-028 y BUG-033) no son fallos de funcionamiento: son capas de UI**
@@ -210,6 +210,93 @@ servidor no reinicia nada: sería un botón muerto).
 **Verificación:** `check-game-dom.mjs space` → ✅ 32/32 sin ausencias · protocolo real del
 juego completo (`MATCH_WAITING → MATCH_START → MATCH_LIVE → RIVAL_TICK`) · el SDK entrega
 `onMatchReady → onMatchLive`.
+
+---
+
+### 🔴 BUG-042 · Sky Runner: se podía «jugar solito» antes de que hubiera partida
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Alto** (el juego parecía empezado sin rival ni reglas) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/hub/public/games/sky/js/physics.js` (extraído de `game.js`) |
+
+**Síntoma reportado:** *"al principio, cuando no hay nadie jugando y el primer jugador inicia, este juego puede literalmente jugar solito, no sé por qué"*.
+
+**Causa raíz:**
+
+```javascript
+// gameState arranca en IDLE
+if (gameState === STATE_IDLE || gameState === STATE_READY) {
+  z += 0.12;                                    // ← ¡AVANZA SOLO!
+  x = Math.sin(Date.now() * 0.002) * 0.25;
+  return;
+}
+```
+
+`gameState` **empieza en `IDLE`**, así que **desde el instante en que se abría la página la pista
+avanzaba sola**. El primer jugador que entraba veía el escenario desplazarse y parecía que ya
+estaba jugando: sin rival, sin marcador y sin forma de perder. No era un fallo de
+emparejamiento, era el estado inicial del motor.
+
+**Arreglo:** mientras no haya partida, el escenario está **QUIETO** y sólo se ve una vista previa
+del circuito (con un balanceo suave del encuadre para que no parezca muerto). El avance empieza
+con `MATCH_LIVE`, y sólo entonces. El rival fantasma tampoco se dibuja fuera de partida.
+
+**Verificado:** `test-sky-physics.mjs` recorre 300 pasos en `IDLE` y en `READY` y confirma que
+`z` no se mueve, que no se puntúa y que no se puede caer.
+
+---
+
+### 🔴 BUG-043 · Si los dos caían a la vez, el ganador salía por azar (y uno se quedaba sin resultado)
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Alto** (resultado injusto y pantalla colgada para el perdedor) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/realtime-server/src/match-clock.js` · `rooms.js` |
+
+**Síntoma reportado:** *"si ambos caen a la misma vez, igual asigna a un ganador"*.
+
+**Causa raíz:** cuando un jugador caía, el servidor **cerraba el duelo al instante**. El aviso
+del otro llegaba unos milisegundos después y se descartaba por «partida ya terminada». Dos
+consecuencias:
+
+1. El jugador que había caído casi a la vez **se quedaba sin ver su resultado**: la pantalla
+   parecía colgada, que es justo lo que se reportó al principio.
+2. El ganador se decidía con el primer aviso que llegaba, es decir **por azar**.
+
+**Arreglo:** cuando alguien cae se abre una **ventana corta (400 ms)** para escuchar también al
+rival. Si el rival cae dentro de ella, gana **quien aguantó más tiempo** (la puntuación es el
+tiempo sobrevivido). Si aguantaron **exactamente lo mismo**, se declara **empate técnico**: no se
+inventa un mérito que no existe.
+
+La regla vive en `resolverDobleCaida()` para poder probarla sin levantar el servidor.
+
+**Verificado:** `test-doble-caida.mjs` comprueba 5 casos con tiempos reales de tu partida
+(97 vs 46, 60 vs 61, 50 vs 50…) y **121 combinaciones** confirmando que el ganador **nunca** es
+quien cayó antes.
+
+---
+
+### 🔴 BUG-044 · El tiempo de supervivencia se decide con datos del servidor, no del cliente
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Alto** (habría roto el principio Zero Client Trust) |
+| **Estado** | ✅ **VERIFICADO** el 2026-09-29 |
+| **Ubicación** | `apps/realtime-server/src/rooms.js` · `_resolverCaida` |
+
+**Contexto:** al comparar quién aguantó más en una doble caída había que decidir **de dónde sale
+ese tiempo**. El cliente envía `PLAYER_CRASHED` **sin puntuación**, así que el navegador **no
+tiene forma de dictar el resultado**.
+
+El tiempo usado es `player.score`, que el servidor mantiene a partir de los **ticks ya validados**
+por el anticheat (`tick-handler.js`: ritmo de paquetes + física del avance). Un cliente
+manipulado que intentara inflar su tiempo sería detectado antes de que ese dato contara.
+
+**Verificado recorriendo el flujo completo:** cliente → `PLAYER_TICK` (validado) →
+`curPlayer.score` → `_resolverCaida`. **Ningún dato del cliente decide la partida.**
 
 ---
 
