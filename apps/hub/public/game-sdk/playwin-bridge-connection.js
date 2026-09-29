@@ -23,7 +23,7 @@
 
   // Versión de la API del SDK. Se compara con la que espera el puente para
   // detectar que el navegador sirvió una copia cacheada de otro módulo.
-  var SDK_VERSION = 7;
+  var SDK_VERSION = 8;
 
   /**
    * Crea el gestor de conexión de una sesión de juego.
@@ -44,6 +44,21 @@
     // Manejador de mensajes del SDK, guardado aparte del socket para no perderlo
     // cuando el socket todavía no existe.
     var messageHandler = null;
+
+    /** Cierra y olvida el socket actual, cancelando sus relojes. */
+    function descartarSocket() {
+      if (connectTimer) { clearTimeout(connectTimer); connectTimer = null; }
+      if (socket) {
+        // Se quitan los manejadores ANTES de cerrar: si no, el cierre dispararía
+        // la lógica de reconexión y abriríamos un socket que no queremos.
+        socket.onopen = null;
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.onmessage = null;
+        try { socket.close(); } catch (_) { /* ya estaba cerrado */ }
+      }
+      socket = null;
+    }
 
     /** Avisa de la caída una sola vez hasta que se recupere. */
     function reportOffline(motivo) {
@@ -110,10 +125,17 @@
     return {
       /** Abre la conexión (idempotente). */
       connect: connect,
-      /** Descarta el socket actual y vuelve a intentarlo desde cero. */
+      /**
+       * Descarta el socket actual y abre uno nuevo. SIEMPRE.
+       *
+       * El `retry` anterior salía sin hacer nada cuando ya había un socket
+       * abierto… que es justo el caso en el que hay que reconectar (por ejemplo,
+       * cuando ese socket se abrió con un token caducado y el servidor lo
+       * rechazó). Sin esto, el jugador se quedaba en la pantalla de acceso
+       * teniendo un token válido en la mano.
+       */
       retry: function () {
-        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
-        socket = null;
+        descartarSocket();
         isOffline = false;
         connect();
       },

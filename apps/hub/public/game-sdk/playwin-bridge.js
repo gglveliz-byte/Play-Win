@@ -5,7 +5,7 @@
   'use strict';
   // Versión de la API del SDK. Debe coincidir con la de playwin-bridge-connection.js
   // y con el ?v= que llevan las etiquetas <script> de los juegos.
-  const SDK_VERSION = 7;
+  const SDK_VERSION = 8;
   let WS_URL = window.PLAYWIN_WS_URL || 'ws://localhost:3001/ws';
   const isInIframe = window.parent && window.parent !== window;
 
@@ -73,9 +73,25 @@
       if (p.wsUrl) WS_URL = p.wsUrl;
       applyPlayerSession(p);
       isHandshakeComplete = true;
+
       if (p.token) {
-        if (!isSocketOpen()) connectWebSocket();
-      } else { showScreen('pw-screen-auth'); }
+        // ------------------------------------------------------------------
+        // UN TOKEN NUEVO SIEMPRE MANDA
+        //
+        // Antes esto era `if (!isSocketOpen()) connectWebSocket()`: si ya había
+        // un socket abierto NO se reconectaba. Pero ese socket podía haberse
+        // abierto con la sesión guardada en localStorage, cuyo token dura 5
+        // minutos. Al caducar, el servidor lo rechaza (SECURITY_ERROR) y el
+        // jugador veía «Token de partida no válido o expirado»… mientras el Hub
+        // le acababa de entregar un token BUENO que nunca llegaba a usarse.
+        //
+        // Reconectar es siempre correcto aquí: se descarta el socket viejo y se
+        // abre uno nuevo con el token recién recibido.
+        // ------------------------------------------------------------------
+        retryConnection();
+      } else {
+        showScreen('pw-screen-auth');
+      }
     } else if (event.data.type === 'PLAYWIN_REQUIRE_LOGIN') {
       showScreen('pw-screen-auth');
     }
@@ -105,8 +121,17 @@
   }
 
   // Reintento manual desde el botón REINTENTAR.
+  /**
+   * Reconecta con el token más reciente, descartando el socket anterior.
+   *
+   * Si aún no hay gestor de conexión (primera vez que el Hub entrega el token),
+   * se crea mediante `connectWebSocket()`.
+   */
   function retryConnection() {
-    if (!connection) return;
+    if (!connection) {
+      connectWebSocket();
+      return;
+    }
     connection.retry();
     isOffline = false;
   }
