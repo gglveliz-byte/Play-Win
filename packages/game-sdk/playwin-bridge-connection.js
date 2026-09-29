@@ -23,7 +23,7 @@
 
   // Versión de la API del SDK. Se compara con la que espera el puente para
   // detectar que el navegador sirvió una copia cacheada de otro módulo.
-  var SDK_VERSION = 5;
+  var SDK_VERSION = 6;
 
   /**
    * Crea el gestor de conexión de una sesión de juego.
@@ -41,6 +41,9 @@
     var socket = null;
     var connectTimer = null;
     var isOffline = false;
+    // Manejador de mensajes del SDK, guardado aparte del socket para no perderlo
+    // cuando el socket todavía no existe.
+    var messageHandler = null;
 
     /** Avisa de la caída una sola vez hasta que se recupere. */
     function reportOffline(motivo) {
@@ -73,8 +76,13 @@
 
     function connect() {
       if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
-
-      socket = new WebSocket(api.wsUrl());
+      try {
+        socket = new WebSocket(api.wsUrl());
+      } catch (err) {
+        console.error('[PlayWin SDK] no se pudo crear el WebSocket:', err && err.message);
+        reportOffline('No se pudo abrir la conexión con ' + api.wsUrl() + ': ' + (err && err.message));
+        return;
+      }
 
       // Sin este timeout, una URL mal configurada o un firewall dejaban el
       // socket en CONNECTING para siempre, sin ningún aviso al jugador.
@@ -91,6 +99,12 @@
       socket.onerror = function () {
         if (!api.isMatchLive()) reportOffline('No se pudo conectar con ' + api.wsUrl());
       };
+      // El manejador de mensajes se guarda desde el principio y se engancha a
+      // CADA socket nuevo. Antes solo se asignaba a un socket ya existente, así
+      // que al llamar setOnMessage() antes de connect() el SDK se quedaba
+      // enviando sin recibir NADA: el juego nunca arrancaba y no había ningún
+      // error. Era el fallo silencioso más grave del SDK.
+      if (messageHandler) socket.onmessage = messageHandler;
     }
 
     return {
@@ -104,7 +118,17 @@
         connect();
       },
       getSocket: function () { return socket; },
-      setOnMessage: function (handler) { if (socket) socket.onmessage = handler; },
+      /**
+       * Registra el manejador de mensajes del servidor.
+       *
+       * Se guarda aunque todavía no exista socket (lo normal: se llama antes de
+       * connect()) y se engancha en cuanto el socket se crea, y también a los
+       * sockets de reconexión.
+       */
+      setOnMessage: function (handler) {
+        messageHandler = handler;
+        if (socket) socket.onmessage = handler;
+      },
       isOpen: function () { return !!socket && socket.readyState === WebSocket.OPEN; },
       isOffline: function () { return isOffline; },
       clearOffline: function () { isOffline = false; }

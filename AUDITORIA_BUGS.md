@@ -133,18 +133,90 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ |
+| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ |
 | 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
-| 🟡 **Medio** | **1 abierto** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · **BUG-028** ❌ |
+| 🟡 **Medio** | **1 abierto** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-028** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **27 de 28** | Todos menos BUG-028 |
+| ✅ **Resueltos** | **29 de 30** | Todos menos BUG-028 |
 
-> **Aritmética:** **28 bugs catalogados = 27 resueltos · 1 abierto · 0 parciales.**
+> **Aritmética:** **30 bugs catalogados = 29 resueltos · 1 abierto · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
 >
 > **El único abierto (BUG-028) no es un fallo de código: es una decisión de producto.**
 > *Sky Runner* tiene su página de arranque vacía; hay que reconstruirla o retirar el
 > juego del catálogo. Las dos opciones cambian lo que ve el jugador.
+
+---
+
+### 🔴 BUG-029 · El SDK enviaba pero NO recibía: el manejador de mensajes se perdía
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** — **era la causa real de "la partida no arranca en ningún juego"** |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `packages/game-sdk/playwin-bridge-connection.js` (`setOnMessage`) |
+
+**Síntoma:** *"mantiene el mismo síntoma, no funciona"*. Los juegos mostraban el HUD con
+`TIEMPO 20` **congelado** y los coches quietos, en cualquier título.
+
+**Cómo se encontró (sin navegador):** se construyó
+[simulate-sdk-client.mjs](scripts/simulate-sdk-client.mjs), que ejecuta los **4 módulos
+reales del SDK** dentro de Node con un DOM mínimo y un WebSocket falso que entrega la
+misma secuencia que el servidor. El veredicto fue inmediato:
+
+```
+Mensajes que el SDK envió al servidor: JOIN_MATCH, PING, PING   ← envía bien
+Callbacks recibidos por el juego: (NINGUNO)                     ← ¡no recibe NADA!
+```
+
+**Causa raíz — un orden de llamadas incorrecto:**
+
+```javascript
+// playwin-bridge.js
+connection.setOnMessage(handleServerMessage);   // se llama PRIMERO…
+connection.connect();                           // …y el socket se crea DESPUÉS
+
+// playwin-bridge-connection.js (ANTES)
+setOnMessage: function (handler) { if (socket) socket.onmessage = handler; }
+//                                 ^^^^^^^^^ el socket aún es null -> el manejador SE PIERDE
+```
+
+El manejador de mensajes **nunca se enganchaba al WebSocket**. El SDK enviaba
+`JOIN_MATCH` y `PING` correctamente, pero todo lo que el servidor respondía se
+descartaba. Consecuencia: ni `MATCH_WAITING`, ni `MATCH_START`, ni `MATCH_LIVE`; el
+juego nunca arrancaba y **no aparecía ningún error en ninguna parte**.
+
+**Arreglo:** el manejador se guarda en una variable propia y se engancha a **cada**
+socket nuevo (incluidas las reconexiones).
+
+---
+
+### 🔴 BUG-030 · `handleMatchStart` llamaba a una función que no existía
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** — segunda causa del mismo síntoma |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `packages/game-sdk/playwin-bridge.js` (`stopWaitingNotice`) |
+
+**Cómo se encontró:** el mismo simulador, ya con BUG-029 arreglado, destapó el
+siguiente fallo al entregar `MATCH_START`:
+
+```
+ReferenceError: stopWaitingNotice is not defined
+    at handleMatchStart (packages/game-sdk/playwin-bridge.js:291:5)
+```
+
+`handleMatchStart()` invocaba `stopWaitingNotice()`, pero **esa función nunca se
+definió**. Al recibir `MATCH_START` se lanzaba la excepción y **toda la secuencia de
+emparejamiento moría ahí**: ni pantalla de versus, ni `MATCH_LIVE`, ni arranque del
+juego. El jugador veía exactamente lo que reportaba: el HUD congelado en `20`.
+
+**Arreglo:** se define la función que faltaba y se **blinda el procesador completo de
+mensajes** con `try/catch`, para que un fallo puntual no vuelva a matar la secuencia en
+silencio.
+
+---
 
 ### ✅ Cierre del Hito C.3 — el juego respeta al árbitro (2026-09-29)
 

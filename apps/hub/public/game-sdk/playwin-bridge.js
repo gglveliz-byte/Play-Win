@@ -5,7 +5,7 @@
   'use strict';
   // Versión de la API del SDK. Debe coincidir con la de playwin-bridge-connection.js
   // y con el ?v= que llevan las etiquetas <script> de los juegos.
-  const SDK_VERSION = 5;
+  const SDK_VERSION = 6;
   let WS_URL = window.PLAYWIN_WS_URL || 'ws://localhost:3001/ws';
   const isInIframe = window.parent && window.parent !== window;
 
@@ -208,13 +208,34 @@
     }, 15000);
   }
 
+  // Cancela el aviso de espera prolongada. Se llama al encontrar rival.
+  //
+  // FALTABA: handleMatchStart() la invocaba sin que existiera, así que al llegar
+  // MATCH_START se lanzaba un ReferenceError y la secuencia de emparejamiento
+  // moría ahí: ni pantalla de versus, ni MATCH_LIVE, ni arranque del juego. El
+  // jugador veía el HUD congelado sin ningún mensaje de error.
+  function stopWaitingNotice() {
+    if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
+  }
+
   // Procesa los eventos que llegan del servidor de duelos.
+  //
+  // El cuerpo ENTERO va protegido: un fallo al procesar un evento (por ejemplo
+  // una función inexistente) rompía la secuencia de emparejamiento EN SILENCIO y
+  // el jugador se quedaba con el HUD congelado. Ya ocurrió una vez; no debe
+  // repetirse nunca más.
   function handleServerMessage(event) {
-    const msg = JSON.parse(event.data);
+    let msg;
+    try {
+      msg = JSON.parse(event.data);
+    } catch (err) {
+      console.error('[PlayWin SDK] mensaje ilegible del servidor:', err && err.message, event.data);
+      return;
+    }
     // Traza visible en la consola del navegador (F12). Imprescindible para
     // diagnosticar por qué una partida se queda parada sin tocar el código.
     console.log(`[PlayWin SDK] ◀ ${msg.event}`, msg);
-    {
+    try {
       if (msg.event === 'SECURITY_ERROR') {
         showScreen('pw-screen-auth');
         const desc = document.querySelector('#pw-screen-auth .pw-subtitle');
@@ -237,6 +258,8 @@
       } else if (msg.event === 'MATCH_RESUME') {
         handleMatchResume(msg);
       } else if (msg.event === 'MATCH_END') handleMatchEnd(msg);
+    } catch (err) {
+      console.error(`[PlayWin SDK] fallo al procesar el evento "${msg.event}":`, err);
     }
   }
 
