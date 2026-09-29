@@ -2,17 +2,29 @@ import { matchService } from '@playwin/database';
 import { verifyMatchTicket, validateTickPhysics, detectCollusion, validatePacketRate, isSelfMatchAllowed } from './anticheat.js';
 import { ReconnectManager } from './match-reconnect.js';
 import { createDuelRoom, createGhostRoom } from './room-factory.js';
+import { buildStatusSnapshot } from './room-status.js';
+import { buildGhostCallbacks } from './ghost-match.js';
+import { removeFromQueues, handleInMatchDisconnect } from './disconnect-handler.js';
 
 /**
  * Gestor de salas 1v1 y árbitro en tiempo real con Anti-Cheat (< 350 líneas)
  * Cumple AGENTS.md (Zero Client Trust) y playwin-code-governance.
  */
 export class RoomManager {
-  constructor() {
+  /**
+   * @param {object} [options]
+   * @param {boolean} [options.ghostBotsEnabled] Si es false, nunca se empareja
+   *   contra un rival de división: solo PvP real (útil para probar con personas).
+   * @param {number} [options.ghostBotDelayMs] Cuánto espera un jugador real en
+   *   cola antes de que entre un bot.
+   */
+  constructor(options = {}) {
     this.waitingQueues = new Map();
     this.rooms = new Map();
     this.socketToRoom = new Map();
     this.reconnectManager = new ReconnectManager(15000);
+    this.ghostBotsEnabled = options.ghostBotsEnabled !== false;
+    this.ghostBotDelayMs = Number(options.ghostBotDelayMs) || 3500;
   }
 
   joinQueue(rawPlayer, socket, clientIp = '127.0.0.1') {
@@ -111,13 +123,18 @@ export class RoomManager {
       if (opponent.player.id === player.id) player.username = `${player.username} (Tab 2)`;
       this._createDuelRoom(gameId, opponent, { player, socket, ip: clientIp });
     } else {
+      // Sin rival humano todavía: se espera antes de recurrir a un bot.
+      // Si los bots están desactivados, el jugador queda en cola indefinidamente
+      // (comportamiento deseado para probar PvP entre personas reales).
       const queueEntry = { player, socket, ip: clientIp, matchTimer: null };
-      queueEntry.matchTimer = setTimeout(() => {
-        const q = this.waitingQueues.get(gameId);
-        if (!q) return;
-        const idx = q.indexOf(queueEntry);
-        if (idx !== -1) { q.splice(idx, 1); this._startGhostMatch(gameId, queueEntry); }
-      }, 3500);
+      if (this.ghostBotsEnabled) {
+        queueEntry.matchTimer = setTimeout(() => {
+          const q = this.waitingQueues.get(gameId);
+          if (!q) return;
+          const idx = q.indexOf(queueEntry);
+          if (idx !== -1) { q.splice(idx, 1); this._startGhostMatch(gameId, queueEntry); }
+        }, this.ghostBotDelayMs);
+      }
       queue.push(queueEntry);
       this._send(socket, { event: 'MATCH_WAITING', gameId, message: 'Buscando contrincante en tu división...' });
     }
@@ -132,29 +149,29 @@ export class RoomManager {
 
   async _startGhostMatch(gameId, entry) {
     let targetRoomId = null;
-    const callbacks = {
-      onLive: () => {
-        const cur = targetRoomId ? this.rooms.get(targetRoomId) : null;
-        if (cur) { cur.liveAt = Date.now(); cur.playerA.lastTick.timestamp = cur.liveAt; }
-        this._send(entry.socket, { event: 'MATCH_LIVE' });
-      },
-      onTick: (t) => this._send(entry.socket, { event: 'RIVAL_TICK', x: t.x, y: t.y, score: t.score, isAlive: t.isAlive }),
-      onFinish: () => {
-        const cur = targetRoomId ? this.rooms.get(targetRoomId) : null;
-        if (cur && cur.status === 'PLAYING') this._resolveScoreWinner(cur);
-      },
-      onCrash: () => {
-        const cur = targetRoomId ? this.rooms.get(targetRoomId) : null;
-        if (cur && cur.status === 'PLAYING') {
-          cur.status = 'FINISHED';
-          this._finishMatch(cur, cur.playerA, cur.playerB, 'OPPONENT_CRASH', `El rival se estrelló contra un obstáculo.`, 100, 20);
-        }
-      },
-    };
+    const callbacks = buildGhostCallbacks({
+      getRoomId: () => targetRoomId,
+      getRoom: (roomId) => this.rooms.get(roomId),
+      send: this._send.bind(this),
+      resolveScore: (room) => this._resolveScoreWinner(room),
+      finishMatch: (room, winner, loser, reason, summary, wp, lp) =>
+        this._finishMatch(room, winner, loser, reason, summary, wp, lp),
+      socket: entry.socket,
+    });
+
     const { room, roomId } = await createGhostRoom(gameId, entry, callbacks, this._send.bind(this));
     targetRoomId = roomId;
     this.rooms.set(roomId, room);
     this.socketToRoom.set(entry.socket, roomId);
+  }
+
+  /**
+   * Instantánea del estado del servidor: salas activas, bots en juego y
+   * profundidad de cada cola. La lógica vive en `room-status.js` para respetar
+   * el límite de tamaño de archivo.
+   */
+  getStatusSnapshot() {
+    return buildStatusSnapshot(this);
   }
 
   handlePlayerTick(socket, tickData) {
@@ -261,34 +278,24 @@ export class RoomManager {
     this._finishMatch(room, isA ? room.playerB : room.playerA, isA ? room.playerA : room.playerB, reason, `Descalificación por anomalía (${reason}).`, 100, 0);
   }
 
+  /**
+   * Gestiona la desconexión de un socket: lo saca de las colas y, si estaba en
+   * partida, aplica la ventana de gracia de reconexión.
+   * La lógica vive en `disconnect-handler.js` para respetar el límite de tamaño.
+   */
   handleDisconnect(socket) {
-    for (const [, queue] of this.waitingQueues.entries()) {
-      const idx = queue.findIndex((e) => e.socket === socket);
-      if (idx !== -1) {
-        if (queue[idx].matchTimer) clearTimeout(queue[idx].matchTimer);
-        queue.splice(idx, 1);
-      }
-    }
-    const roomId = this.socketToRoom.get(socket);
-    const room = roomId ? this.rooms.get(roomId) : null;
-    if (room && (room.status === 'COUNTDOWN' || room.status === 'PLAYING')) {
-      const isA = socket === room.playerA.socket;
-      const [loser, winner] = isA ? [room.playerA, room.playerB] : [room.playerB, room.playerA];
-      if (room.isGhostMatch && room.ghostSimulation) {
-        room.ghostSimulation.pause();
-      }
-      if (winner.socket) {
-        this._send(winner.socket, { event: 'RIVAL_DISCONNECTED', graceSeconds: 15, message: `${loser.username} desconectado. Esperando 15s...` });
-      }
-      this.reconnectManager.schedule(loser.id, loser.username, room.roomId, () => {
-        const cur = this.rooms.get(roomId);
-        if (cur && (cur.status === 'COUNTDOWN' || cur.status === 'PLAYING')) {
-          cur.status = 'FINISHED';
-          if (cur.ghostSimulation) cur.ghostSimulation.stop();
-          this._finishMatch(cur, winner, loser, 'FORFEIT', `${loser.username} no logró reconectar a tiempo.`, 100, 0);
-        }
-      });
-    }
+    removeFromQueues(this.waitingQueues, socket);
+    handleInMatchDisconnect(
+      {
+        rooms: this.rooms,
+        socketToRoom: this.socketToRoom,
+        reconnectManager: this.reconnectManager,
+        send: this._send.bind(this),
+        finishMatch: (room, winner, loser, reason, summary, wp, lp) =>
+          this._finishMatch(room, winner, loser, reason, summary, wp, lp),
+      },
+      socket
+    );
     this.socketToRoom.delete(socket);
   }
 

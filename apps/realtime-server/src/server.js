@@ -4,9 +4,31 @@ import './load-env.js';
 import { createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 import { RoomManager } from './rooms.js';
+// Espera antes de recurrir a un rival de división (Ghost Bot).
+import { GHOST_MATCH_TIMEOUT_MS } from '@playwin/database/constants';
 
 const PORT = process.env.PORT || 3001;
-const roomManager = new RoomManager();
+
+/**
+ * Configuración de los RIVALES DE DIVISIÓN (Ghost Bots).
+ *
+ * Un ghost bot solo aparece cuando un jugador REAL lleva esperando en la cola
+ * más de `GHOST_BOT_DELAY_MS`. Sirve para que nadie se quede mirando el radar
+ * indefinidamente, pero un valor demasiado bajo impide que dos personas se
+ * encuentren: con 3.5s, si un amigo entra 4 segundos después que tú, tú ya estás
+ * en una partida contra un bot y no os emparejaréis.
+ *
+ * Variables de entorno:
+ *   GHOST_BOTS_ENABLED=false   → desactiva los bots por completo (solo PvP real)
+ *   GHOST_BOT_DELAY_MS=15000   → cuánto esperar antes de recurrir a un bot
+ */
+const GHOST_BOTS_ENABLED = process.env.GHOST_BOTS_ENABLED !== 'false';
+const GHOST_BOT_DELAY_MS = Number(process.env.GHOST_BOT_DELAY_MS) || GHOST_MATCH_TIMEOUT_MS;
+
+const roomManager = new RoomManager({
+  ghostBotsEnabled: GHOST_BOTS_ENABLED,
+  ghostBotDelayMs: GHOST_BOT_DELAY_MS,
+});
 
 // Servidor HTTP para health check y métricas
 const server = createServer((req, res) => {
@@ -30,6 +52,15 @@ const server = createServer((req, res) => {
         activeRooms: roomManager.rooms.size,
         uptimeSeconds: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),
+        // Estado detallado: permite VER si hay bots jugando, quién espera y
+        // cuántas partidas humanas hay en curso. Antes solo se veía el total.
+        duels: roomManager.getStatusSnapshot(),
+        config: {
+          port: Number(PORT),
+          ghostBotsEnabled: GHOST_BOTS_ENABLED,
+          ghostBotDelayMs: GHOST_BOT_DELAY_MS,
+          selfMatchAllowed: process.env.ALLOW_SELF_MATCH === 'true',
+        },
       })
     );
     return;

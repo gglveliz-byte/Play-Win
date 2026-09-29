@@ -9,7 +9,7 @@
  */
 import pg from 'pg';
 import assert from 'node:assert';
-import { resolveRankTier, RANK_TIER_THRESHOLDS, LEAGUE_PRIZE_POOL } from '@playwin/database';
+import { resolveRankTier, RANK_TIER_THRESHOLDS, LEAGUE_PRIZE_POOL } from '../src/constants.js';
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -131,20 +131,43 @@ check('Existe más de una división en uso (el sharding funciona)', () => {
   assert.ok(divisiones.rows[0].n > 1, `solo hay ${divisiones.rows[0].n} división`);
 });
 
+// Los umbrales se derivan de las CONSTANTES compartidas, no se escriben a mano:
+// si los umbrales cambian, esta comprobación los sigue automáticamente.
+const tierCaseSql = (() => {
+  const whens = RANK_TIER_THRESHOLDS.filter((t) => t.min > 0)
+    .sort((a, b) => b.min - a.min)
+    .map((t) => `WHEN p.skill_rating >= ${t.min} THEN '${t.tier}'`)
+    .join(' ');
+  const fallback = RANK_TIER_THRESHOLDS.find((t) => t.min === 0)?.tier || 'BRONZE';
+  return `CASE ${whens} ELSE '${fallback}' END`;
+})();
+
 const coherencia = await pool.query(`
   SELECT COUNT(*)::int AS n FROM game_passports p
-  WHERE p.rank_tier IS DISTINCT FROM (
-    CASE
-      WHEN p.skill_rating >= 2400 THEN 'ELITE'
-      WHEN p.skill_rating >= 2100 THEN 'DIAMOND'
-      WHEN p.skill_rating >= 1850 THEN 'PLATINUM'
-      WHEN p.skill_rating >= 1600 THEN 'GOLD'
-      WHEN p.skill_rating >= 1400 THEN 'SILVER'
-      ELSE 'BRONZE'
-    END);`);
+  WHERE p.rank_tier IS DISTINCT FROM ${tierCaseSql};`);
 check('Todo rank_tier concuerda con su skill_rating', () => {
   assert.strictEqual(coherencia.rows[0].n, 0, `hay ${coherencia.rows[0].n} pasaportes incoherentes`);
 });
+
+// El trigger debe mantener la coherencia por sí solo: se fuerza un cambio de MMR
+// y se comprueba que la división lo sigue sin intervención del código.
+const victima = await pool.query(
+  'SELECT id, skill_rating, rank_tier FROM game_passports ORDER BY updated_at DESC LIMIT 1;'
+);
+if (victima.rows.length > 0) {
+  const p = victima.rows[0];
+  await pool.query('UPDATE game_passports SET skill_rating = 2500 WHERE id = $1;', [p.id]);
+  const elevado = await pool.query('SELECT rank_tier FROM game_passports WHERE id = $1;', [p.id]);
+  await pool.query('UPDATE game_passports SET skill_rating = $2 WHERE id = $1;', [p.id, p.skill_rating]);
+  const restaurado = await pool.query('SELECT rank_tier FROM game_passports WHERE id = $1;', [p.id]);
+
+  check('El trigger deriva la división al cambiar el MMR (2500 → ELITE)', () => {
+    assert.strictEqual(elevado.rows[0].rank_tier, 'ELITE', `se obtuvo ${elevado.rows[0].rank_tier}`);
+  });
+  check('Al restaurar el MMR, la división vuelve a su valor correcto', () => {
+    assert.strictEqual(restaurado.rows[0].rank_tier, resolveRankTier(p.skill_rating));
+  });
+}
 
 console.log(`\n   Bolsa por liga verificada: $${LEAGUE_PRIZE_POOL.toFixed(2)}`);
 console.log(`\n${fallos === 0 ? '🎉 INTEGRIDAD DE LIGAS Y SHARDING VERIFICADOS AL 100%' : `❌ ${fallos} comprobaciones fallaron`}`);
