@@ -79,7 +79,65 @@
     </div>
   </div>
 
-  <!-- Inyección del SDK Universal y Script del Juego Original -->
+    <!-- ============================================================
+         PANTALLAS DEL MOTOR (.ui-screen)
+         El motor las muestra y oculta con la clase `active`; el CSS las
+         mantiene ocultas salvo que la tengan. Faltaban por completo en este
+         archivo, así que al morir el juego se quedaba sin pantalla de fin de
+         partida y sin ningún botón: el jugador no podía continuar.
+         ============================================================ -->
+
+    <!-- 1. Título -->
+    <div id="screen_title" class="ui-screen">
+      <div class="ui-card">
+        <div class="ui-badge">FUERZA ESPACIAL · 1v1</div>
+        <h1 class="ui-title">Defiende el Sector</h1>
+        <p class="ui-subtitle">Sobrevive a las oleadas y supera la puntuación de tu rival.</p>
+        <div class="ui-record">
+          <span class="ui-record-label">TU RÉCORD</span>
+          <span id="menu_best_val" class="ui-record-value">0 PUNTOS</span>
+        </div>
+        <button id="btn_start" class="ui-btn">INICIAR PARTIDA</button>
+      </div>
+    </div>
+
+    <!-- 2. Pausa.
+         En partida oficial 1v1 NO se puede pausar: el servidor sigue contando y
+         el SDK anula las teclas P y Escape (regla "Zero Pause Trust"). Esta
+         pantalla solo aparece si el motor la abre, y ofrece salir. -->
+    <div id="screen_pause" class="ui-screen">
+      <div class="ui-card">
+        <div class="ui-badge">PARTIDA EN CURSO</div>
+        <h2 class="ui-title">No se puede pausar</h2>
+        <p class="ui-subtitle">En un duelo oficial el reloj sigue corriendo para los dos jugadores. Tu rival continúa en juego mientras lees esto.</p>
+        <div class="ui-btn-stack">
+          <button id="btn_resume" class="ui-btn">VOLVER A LA PARTIDA</button>
+          <button id="btn_menu_pause" class="ui-btn ui-btn-secondary">ABANDONAR EL DUELO</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Fin de partida -->
+    <div id="screen_gameover" class="ui-screen">
+      <div class="ui-card">
+        <div class="ui-badge">FIN DE PARTIDA</div>
+        <h2 class="ui-title">Nave Destruida</h2>
+        <div class="ui-stats">
+          <div class="ui-stat"><span class="ui-stat-label">PUNTOS</span><span id="final_score" class="ui-stat-value">0</span></div>
+          <div class="ui-stat"><span class="ui-stat-label">SECTOR</span><span id="final_wave" class="ui-stat-value">1</span></div>
+          <div class="ui-stat"><span class="ui-stat-label">VELOCIDAD MÁX</span><span id="final_speed" class="ui-stat-value">1.0x</span></div>
+          <div class="ui-stat"><span class="ui-stat-label">MEJOR COMBO</span><span id="final_combo" class="ui-stat-value">x1</span></div>
+          <div class="ui-stat"><span class="ui-stat-label">RÉCORD</span><span id="final_best" class="ui-stat-value">0</span></div>
+        </div>
+        <div id="new_record_badge" class="ui-record-badge">¡NUEVO RÉCORD PERSONAL!</div>
+        <div class="ui-btn-stack">
+          <button id="btn_restart" class="ui-btn">JUGAR OTRA VEZ</button>
+          <button id="btn_menu" class="ui-btn ui-btn-secondary">SALIR AL MENÚ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inyección del SDK Universal y Script del Juego Original -->
   <script src="/game-sdk/playwin-bridge-ui.js?v=6"></script>
   <script src="/game-sdk/playwin-bridge-status.js?v=6"></script>
   <script src="/game-sdk/playwin-bridge-connection.js?v=6"></script>

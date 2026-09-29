@@ -133,18 +133,108 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ |
+| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ |
 | 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
-| 🟡 **Medio** | **1 abierto** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-028** ❌ |
+| 🟡 **Medio** | **2 abiertos** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-033** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **29 de 30** | Todos menos BUG-028 |
+| ✅ **Resueltos** | **30 de 32** | Todos menos BUG-028 y BUG-033 |
 
-> **Aritmética:** **30 bugs catalogados = 29 resueltos · 1 abierto · 0 parciales.**
+> **Aritmética:** **32 bugs catalogados = 30 resueltos · 2 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
 >
-> **El único abierto (BUG-028) no es un fallo de código: es una decisión de producto.**
+> **Los abiertos (BUG-028 y BUG-033) no son fallos de funcionamiento: son capas de UI**
 > *Sky Runner* tiene su página de arranque vacía; hay que reconstruirla o retirar el
 > juego del catálogo. Las dos opciones cambian lo que ve el jugador.
+
+---
+
+### 🔴 BUG-032 · `space` se quedaba atascado para siempre: sus pantallas no existían
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (bloqueo total: el jugador no podía continuar) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/hub/public/games/space/index.html` · `style.css` |
+
+**Síntoma reportado:** *"está lleno de bugs, la conexión la hace bien pero después no hay
+vinculación real, no se ve bien, llega un momento que se queda en esa pantalla infinitamente"*.
+
+**Cómo se encontró:** comparando los elementos que el motor busca por `id` con los que el
+HTML realmente define. Herramienta nueva: [check-game-dom.mjs](scripts/check-game-dom.mjs).
+
+```
+$ node scripts/check-game-dom.mjs space
+  El motor busca 32 elementos · el HTML define 16
+  ❌ Ausentes: 17
+      · btn_start · btn_restart · btn_menu · btn_resume
+      · screen_title · screen_pause · screen_gameover
+      · final_score · final_best · final_wave · final_speed · final_combo
+      · new_record_badge · menu_best_val · pause_toggle …
+```
+
+**El `index.html` de `space` solo tenía canvas, HUD y controles móviles: le faltaba TODA la
+capa de pantallas** (título, pausa y fin de partida) que el motor busca.
+
+**Por qué producía un bloqueo infinito:**
+
+```javascript
+// script.js — al morir la nave
+GameManager.prototype.gameOver = function () {
+    this.state = 'gameover';                    // el bucle deja de actualizar
+    var gameoverScreen = document.getElementById('screen_gameover');
+    if (gameoverScreen) gameoverScreen.classList.add('active');   // ← null: no pasa nada
+};
+```
+
+`state = 'gameover'` detiene la simulación, pero **como la pantalla no existe no aparece
+nada**: ni resultado, ni botones, ni forma de salir. El jugador se quedaba mirando el espacio
+infinitamente, exactamente como reportó.
+
+**Arreglo aplicado:**
+
+1. **Reconstruida la capa de pantallas** que el motor ya esperaba: título (con récord y
+   `btn_start`), pausa y fin de partida con las 5 estadísticas (`final_score`, `final_wave`,
+   `final_speed`, `final_combo`, `final_best`) y sus botones.
+2. **CSS nuevo** para `.ui-screen` y `.ui-card`, usando **tokens** (se centralizaron
+   `--on-dark`, `--mute`, `--soft`, `--warning`, `--line-faint`, `--fill-faint`).
+3. **Un solo dueño por pantalla:** `showScreen()` del SDK ahora retira las `.ui-screen` del
+   motor antes de mostrar la suya. Antes las dos podían quedar activas a la vez.
+4. **Pausa coherente con el reglamento:** el SDK anula `P` y `Escape` durante la partida
+   (regla *Zero Pause Trust*), así que la pantalla explica que **no se puede pausar en un
+   duelo oficial** y ofrece salir, en vez de un botón de reanudar que no llevaba a ninguna parte.
+
+**Dos ausencias deliberadas** (documentadas en el comprobador para que no parezcan olvidos):
+`pause_toggle` (el SDK prohíbe la pausa local) y `btn_restart_pause` (con árbitro del
+servidor no reinicia nada: sería un botón muerto).
+
+**Verificación:** `check-game-dom.mjs space` → ✅ 32/32 sin ausencias · protocolo real del
+juego completo (`MATCH_WAITING → MATCH_START → MATCH_LIVE → RIVAL_TICK`) · el SDK entrega
+`onMatchReady → onMatchLive`.
+
+---
+
+### 🟡 BUG-033 · `carreras` tiene la misma capa de pantallas incompleta (no bloquea)
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🟡 Medio (pérdida de información, no bloqueo) |
+| **Estado** | ❌ **ABIERTO** — documentado, pendiente de decisión |
+| **Ubicación** | `apps/hub/public/games/carreras/index.html` |
+
+**Hallazgo:** el motor de carreras busca **17** elementos y el HTML define **11**. Faltan:
+
+```
+go-distance · go-checkpoints · go-best · hud-best · btn-start · btn-restart · btn-menu · btn_sound
+```
+
+**Por qué NO bloquea:** en carreras, `endGame()` llama **antes** a `PlayWin.notifyFinish()`,
+el servidor resuelve la partida y **el SDK muestra su pantalla de resultado**. El jugador sí
+puede continuar. Lo que se pierde es el detalle local del motor (distancia, checkpoints,
+mejor marca) y sus botones de menú.
+
+**Arreglo pendiente:** reconstruir esos elementos igual que en `space`. **No se hizo en este
+hito** para no mezclar dos juegos en un mismo cambio; el comprobador ya lo señala de forma
+permanente (`node scripts/check-game-dom.mjs carreras`).
 
 ---
 

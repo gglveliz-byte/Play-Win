@@ -1,5 +1,6 @@
 :root {
   --orange: #d2691a;
+  --orange-2: #a8500f;
   --orange-glow: rgba(210, 105, 26, 0.45);
   --cyan: #00f0ff;
   --cyan-glow: rgba(0, 240, 255, 0.4);
@@ -9,6 +10,14 @@
   --card-border: rgba(210, 105, 26, 0.3);
   --font-main: 'Inter', system-ui, -apple-system, sans-serif;
   --font-hud: 'Orbitron', system-ui, sans-serif;
+  /* Tintas y trazos de las pantallas del motor (mismos valores que usa el HUD,
+     centralizados aquí para no repartir colores sueltos por las reglas). */
+  --on-dark: #edecea;
+  --mute: #94a3b8;
+  --soft: #cbd5e1;
+  --warning: #ffb703;
+  --line-faint: rgba(255, 255, 255, 0.08);
+  --fill-faint: rgba(255, 255, 255, 0.04);
 }
 
 * {
@@ -321,6 +330,166 @@ html, body {
   border-color: var(--orange);
   color: #ffedd5;
   box-shadow: 0 0 10px var(--orange-glow);
+}
+
+/* ==========================================================================
+   PANTALLAS DEL MOTOR (título, pausa y fin de partida)
+   Faltaban por completo: el motor las buscaba por id y no existían, así que al
+   morir la nave el juego se quedaba sin pantalla final ni botones. Se ocultan
+   por defecto y el motor las muestra añadiéndoles la clase `active`.
+   ========================================================================== */
+.ui-screen {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: radial-gradient(circle at 50% 40%, rgba(2, 6, 23, 0.82) 0%, rgba(2, 6, 23, 0.97) 100%);
+  z-index: 60;
+  backdrop-filter: blur(3px);
+}
+
+.ui-screen.active {
+  display: flex;
+}
+
+.ui-card {
+  width: min(440px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  text-align: center;
+  padding: 26px 22px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 24px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+}
+
+.ui-badge {
+  font-family: var(--font-hud);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--orange);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.ui-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--on-dark);
+  margin-bottom: 8px;
+}
+
+.ui-subtitle {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--mute);
+  margin-bottom: 18px;
+}
+
+.ui-record {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  margin-bottom: 18px;
+  background: rgba(210, 105, 26, 0.1);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+}
+
+.ui-record-label {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--mute);
+}
+
+.ui-record-value {
+  font-family: var(--font-hud);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--orange);
+}
+
+.ui-record-badge {
+  display: none;
+  margin-bottom: 14px;
+  padding: 8px;
+  font-family: var(--font-hud);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--warning);
+  background: rgba(210, 105, 26, 0.18);
+  border: 1px solid var(--orange);
+  border-radius: 999px;
+}
+
+.ui-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.ui-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  background: var(--fill-faint);
+  border: 1px solid var(--line-faint);
+  border-radius: 10px;
+}
+
+.ui-stat-label {
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--mute);
+}
+
+.ui-stat-value {
+  font-family: var(--font-hud);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--cyan);
+}
+
+.ui-btn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ui-btn {
+  width: 100%;
+  padding: 13px;
+  font-family: var(--font-hud);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #ffffff;
+  background: linear-gradient(180deg, var(--orange) 0%, var(--orange-2) 100%);
+  border: 1px solid #ff9248;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.15s, filter 0.15s;
+}
+
+.ui-btn:active {
+  transform: scale(0.97);
+  filter: brightness(1.15);
+}
+
+.ui-btn-secondary {
+  background: transparent;
+  color: var(--soft);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* En pantallas de escritorio amplias sin toque, ocultar los botones flotantes */
