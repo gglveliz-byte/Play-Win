@@ -286,6 +286,11 @@
     if (screenId) {
       const target = document.getElementById(screenId);
       if (target) target.classList.add('active');
+      // Los motores de juego conservan sus propias pantallas (fin de partida,
+      // pausa, título) y algunas pueden quedar visibles por encima de la del
+      // SDK. Si el SDK va a mostrar algo, se retiran primero: si no, el jugador
+      // ve la pantalla de resultado tapada y se queda atascado sin salida.
+      document.querySelectorAll('.ui-screen').forEach((s) => s.classList.remove('active'));
     }
   }
 
