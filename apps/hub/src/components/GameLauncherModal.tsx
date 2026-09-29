@@ -103,8 +103,10 @@ export function GameLauncherModal({
           playerId: player.id || player.playerId,
           username: player.username,
           avatar: player.avatar || player.avatar_url || '🎮',
-          rank: player.rank || 'ORO',
-          skillRating: player.skillRating || 1820,
+          // Sin valores inventados: si el Hub no conoce la división o el MMR
+          // reales del jugador, se envían vacíos y el SDK muestra '—'.
+          rank: player.rank || null,
+          skillRating: player.skillRating ?? null,
           wsUrl: process.env.NEXT_PUBLIC_REALTIME_WS_URL || 'ws://localhost:3001/ws',
         },
       },

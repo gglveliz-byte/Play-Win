@@ -72,7 +72,7 @@ export function WalletView({ user, onOpenAuth }: WalletViewProps) {
         <div className="warm-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--ink)', letterSpacing: '1px' }}>PASE DE TEMPORADA</span>
-            <span style={{ background: '#22c55e', color: '#fff', fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '999px' }}>ACTIVO</span>
+            <span style={{ background: 'var(--success)', color: 'var(--on-dark)', fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '999px' }}>ACTIVO</span>
           </div>
           <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '8px' }}>Play Win Pro Pass</h3>
           <p style={{ fontSize: '13px', color: 'var(--mute)', marginBottom: '20px' }}>
@@ -124,11 +124,11 @@ export function WalletView({ user, onOpenAuth }: WalletViewProps) {
                     <td style={{ padding: '12px 14px' }} suppressHydrationWarning>{new Date(tx.created_at).toLocaleDateString()}</td>
                     <td style={{ padding: '12px 14px', fontWeight: 700 }}>{tx.type}</td>
                     <td style={{ padding: '12px 14px' }}>{formatMethod(tx.provider)}</td>
-                    <td style={{ padding: '12px 14px', fontWeight: 800, color: tx.amount >= 0 ? '#16a34a' : '#dc2626' }}>
+                    <td style={{ padding: '12px 14px', fontWeight: 800, color: tx.amount >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                       {tx.amount >= 0 ? `+${tx.amount}` : tx.amount} {tx.currency}
                     </td>
                     <td style={{ padding: '12px 14px' }}>
-                      <span style={{ background: '#22c55e', color: '#fff', fontSize: '10px', padding: '2px 8px', borderRadius: '999px', fontWeight: 800 }}>
+                      <span style={{ background: 'var(--success)', color: 'var(--on-dark)', fontSize: '10px', padding: '2px 8px', borderRadius: '999px', fontWeight: 800 }}>
                         {tx.status}
                       </span>
                     </td>

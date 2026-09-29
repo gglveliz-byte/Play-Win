@@ -1,5 +1,5 @@
 import { matchService } from '@playwin/database';
-import { verifyMatchTicket, validateTickPhysics, detectCollusion, validatePacketRate } from './anticheat.js';
+import { verifyMatchTicket, validateTickPhysics, detectCollusion, validatePacketRate, isSelfMatchAllowed } from './anticheat.js';
 import { ReconnectManager } from './match-reconnect.js';
 import { createDuelRoom, createGhostRoom } from './room-factory.js';
 
@@ -93,8 +93,10 @@ export class RoomManager {
     const existingIdx = queue.findIndex((e) => e.socket === socket);
     if (existingIdx !== -1) return;
 
-    // Buscar oponente (en dev permite emparejar 2 pestañas del mismo usuario de pruebas)
-    const isDev = process.env.NODE_ENV !== 'production';
+    // Buscar oponente. El emparejamiento contra uno mismo requiere la bandera
+    // explícita ALLOW_SELF_MATCH (antes dependía de NODE_ENV, lo que hacía el
+    // comportamiento implícito e intraducible a pruebas).
+    const isDev = isSelfMatchAllowed();
     const opponentIdx = queue.findIndex(
       (entry) => isDev ? entry.socket !== socket : (entry.player.id !== player.id && entry.player.username !== player.username)
     );
@@ -103,7 +105,7 @@ export class RoomManager {
       const opponent = queue.splice(opponentIdx, 1)[0];
       if (opponent.matchTimer) clearTimeout(opponent.matchTimer);
       const collusion = detectCollusion(opponent, { player, socket, ip: clientIp });
-      if (collusion.isCollusion && !isDev) {
+      if (collusion.isCollusion) {
         return this._send(socket, { event: 'SECURITY_WARNING', message: 'Emparejamiento bloqueado por colusión.' });
       }
       if (opponent.player.id === player.id) player.username = `${player.username} (Tab 2)`;

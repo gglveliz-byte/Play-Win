@@ -50,7 +50,7 @@ export function PassportView({ user, passports, onOpenAuth, onLaunchGame }: Pass
               height: '64px',
               borderRadius: '50%',
               background: 'linear-gradient(135deg, var(--orange), var(--orange-2))',
-              color: '#fff',
+              color: 'var(--on-dark)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -68,7 +68,7 @@ export function PassportView({ user, passports, onOpenAuth, onLaunchGame }: Pass
                 {user?.is_verified && (
                   <span style={{
                     background: 'rgba(16, 185, 129, 0.12)',
-                    color: '#059669',
+                    color: 'var(--success)',
                     fontSize: '11px',
                     fontWeight: 800,
                     padding: '3px 9px',
@@ -243,7 +243,7 @@ export function PassportView({ user, passports, onOpenAuth, onLaunchGame }: Pass
                       fontSize: '12px',
                       letterSpacing: '0.5px',
                       background: match.isWinner ? 'var(--orange)' : 'var(--ink-soft)',
-                      color: '#fff',
+                      color: 'var(--on-dark)',
                     }}>
                       {match.isWinner ? 'VICTORIA' : 'DERROTA'}
                     </div>
@@ -300,7 +300,7 @@ export function PassportView({ user, passports, onOpenAuth, onLaunchGame }: Pass
                       title={`Partida arbitrada en servidor. Semilla PRNG: ${match.seed}`}
                       style={{
                         fontSize: '11px',
-                        color: '#059669',
+                        color: 'var(--success)',
                         fontWeight: 700,
                         display: 'flex',
                         alignItems: 'center',

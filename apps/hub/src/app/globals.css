@@ -14,6 +14,25 @@
   --pill-dark: #0c0c0e;
   --pill-light: #e8e7e4;
   --shadow-warm: 0 18px 45px rgba(12, 12, 14, 0.08);
+
+  /* ---------------------------------------------------------------------------
+   * Tokens semánticos de ESTADO.
+   *
+   * Existen para no volver a escribir colores HEX sueltos en los componentes:
+   * antes había cinco verdes distintos (#1b8a36, #22c55e, #16a34a, #059669) y un
+   * rojo crudo (#ef4444) repartidos por el código (BUG-009).
+   *
+   * Están elegidos dentro de la paleta Warm Editorial: verdes y rojos
+   * apagados, terrosos, coherentes con el papel y la tinta del sistema.
+   * NO introducir azules ni verdes fluorescentes.
+   * ------------------------------------------------------------------------- */
+  --success: #1b8a36;         /* verde bosque: victorias, saldo positivo */
+  --success-strong: #15702c;  /* énfasis sobre --success */
+  --danger: #b3261e;          /* rojo terroso: errores, pérdidas */
+  --danger-strong: #8f1d17;   /* énfasis sobre --danger */
+  --warning: #a86a00;         /* ámbar tostado: avisos */
+  --accent-on-dark: #ffb366;  /* naranja claro legible sobre fondos oscuros */
+  --on-dark: #fff;            /* texto sobre superficies oscuras o de color */
 }
 
 * {

@@ -102,13 +102,13 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
         </div>
 
         {error && (
-          <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#dc2626', padding: '10px 14px', borderRadius: '12px', fontSize: '12px', fontWeight: 600, marginBottom: '16px' }}>
+          <div style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)', border: '1px solid var(--danger)', color: 'var(--danger-strong)', padding: '10px 14px', borderRadius: '12px', fontSize: '12px', fontWeight: 600, marginBottom: '16px' }}>
             ⚠️ {error}
           </div>
         )}
 
         {successMsg && (
-          <div style={{ background: 'rgba(27, 138, 54, 0.12)', border: '1px solid #1b8a36', color: '#1b8a36', padding: '12px 14px', borderRadius: '12px', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>
+          <div style={{ background: 'color-mix(in srgb, var(--success) 12%, transparent)', border: '1px solid var(--success)', color: 'var(--success)', padding: '12px 14px', borderRadius: '12px', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>
             ✉️ {successMsg}
           </div>
         )}
@@ -130,7 +130,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                       padding: '5px 8px',
                       borderRadius: '10px',
                       border: avatar === av ? '2px solid var(--orange)' : '1px solid var(--line)',
-                      background: avatar === av ? 'var(--pill-light)' : '#fff',
+                      background: avatar === av ? 'var(--pill-light)' : 'var(--on-dark)',
                       cursor: 'pointer',
                     }}
                   >
@@ -152,7 +152,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder={mode === 'REGISTER' ? 'Ej. BatiRojo99' : 'Tu alias o correo'}
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--line)', background: '#fff', fontSize: '13px', outline: 'none' }}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--line)', background: 'var(--on-dark)', fontSize: '13px', outline: 'none' }}
               />
             </div>
           )}
@@ -168,7 +168,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="jugador@ejemplo.com"
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--line)', background: '#fff', fontSize: '13px', outline: 'none' }}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--line)', background: 'var(--on-dark)', fontSize: '13px', outline: 'none' }}
               />
             </div>
           )}
@@ -195,7 +195,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--line)', background: '#fff', fontSize: '13px', outline: 'none' }}
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--line)', background: 'var(--on-dark)', fontSize: '13px', outline: 'none' }}
               />
             </div>
           )}

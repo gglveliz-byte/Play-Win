@@ -44,7 +44,7 @@ Los bugs de este documento **no son suposiciones por lectura**: se verificaron e
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟠 Alto |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Evidencia** | `SELECT rank_tier, COUNT(*) FROM game_passports GROUP BY rank_tier` → **178 pasaportes, 178 en `BRONZE`. Cero en cualquier otra división.** |
 
 **Descripción:** `assignPlayerToLeague()` recibe `rankTier` con valor por defecto `'BRONZE'` y **ningún llamador lo calcula desde `skill_rating`**. No existe la función de mapeo MMR → división. El resultado es que **el 100% de los jugadores de la plataforma compite en Bronce**, sin importar su habilidad.
@@ -60,7 +60,7 @@ Los bugs de este documento **no son suposiciones por lectura**: se verificaron e
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟠 Alto |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Evidencia** | 5 ligas con **10 miembros y `is_locked = false`** · global: 21 ligas abiertas vs 8 selladas |
 
 **Descripción:** `is_locked` **solo** se pone en `TRUE` al cerrar la temporada (`settle.ts:124`). El diseño (`playwin-league-engine` §2, `ARQUITECTURA_SISTEMA_ESPORTS.md` §5) exige que *"tan pronto el jugador #10 entra, el grupo se sella con `isLocked = true`"*.
@@ -134,14 +134,29 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
 | 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ |
-| 🟠 **Alto** | **3 abiertos** | BUG-003 · BUG-019 · BUG-020 |
-| 🟡 **Medio** | **2 abiertos** | BUG-008 · BUG-009 |
-| ⚪ **Bajo** | **1 abierto** | BUG-014 |
-| 🟡 **Parciales** | **2** | BUG-011 *(`detectCollusion` solo en producción)* · BUG-015 *(payout sin API real)* |
-| ✅ **Resueltos** | **13** | BUG-001 · 002 · 004 · 005 · 006 · 007 · 010 · 012 · 013 · 016 · 017 · 018 · 021 |
+| 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ |
+| 🟡 **Medio** | **0 abiertos** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ |
+| ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
+| ✅ **Resueltos** | **21 de 21** | Todos |
 
-> **Aritmética:** **21 bugs catalogados** = **6 abiertos** + **2 parciales** + **13 resueltos**.
+> **Aritmética:** **21 bugs catalogados = 21 resueltos · 0 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
+
+### ✅ Cierre del bloque 3 (2026-09-29)
+
+| Bug | Arreglo | Verificación |
+| :--- | :--- | :--- |
+| **BUG-019** | `resolveRankTier()` conectada en todos los llamadores; backfill de los pasaportes; `api/leagues` ya no fuerza `'BRONZE'` | `test:leagues` → **13/13** límites de umbral · distribución real con **3 divisiones** |
+| **BUG-020** | Sellado en `assignPlayerToLeague` + `SELECT ... FOR UPDATE` + **dos triggers** de base de datos: uno rechaza el miembro #11 y otro sella la liga al llenarse | Liga rellenada a 10: el #11 es **RECHAZADO** · 0 ligas llenas sin sellar |
+| **BUG-003** | `users`, `passports`, `matches` y `ledger` del Hub convertidos en **re-exportaciones** de `@playwin/database` | `npx tsc --noEmit` → exit 0 · `test:db`, `test:duel`, `test:history` en verde |
+| **BUG-008** | El frontend consume `PRIZE_SPLIT`, `LEAGUE_PRIZE_POOL`, `GAMES` y `SEASON_POINTS` del paquete | Sin importes quemados en los componentes |
+| **BUG-009** | 6 tokens semánticos nuevos (`--success`, `--danger`, `--on-dark`…) y **21 HEX sustituidos** en 6 componentes | `scratch/replace_hex_tokens.mjs` → sin HEX de estado |
+| **BUG-011** | `detectCollusion` usa la bandera explícita `ALLOW_SELF_MATCH`; `rooms.js` también | `test:collusion` → **11/11** |
+| **BUG-014** | Creada `collusion_spec.js` (antes cobertura CERO) | 11 casos, en ambos modos |
+| **BUG-015** | El retiro **rechaza con 503** sin credenciales de PayPal en vez de debitar sin pagar; el asiento nace `PENDING` | `test:treasury` valida el rechazo y que **el saldo queda intacto** |
+
+**Bug adicional detectado y corregido:** poner un `import` de `@playwin/database` en un componente **cliente** rompía la página entera, porque el paquete lanzaba en el **nivel de módulo** si faltaba `DATABASE_URL` (variable que no existe en el navegador). El pool pasó a crearse de forma **perezosa**: el paquete se importa sin efectos secundarios y sigue fallando ruidosamente en el primer uso real.
+
 
 ### ✅ Resueltos en el bloque 2º (2026-09-29)
 
@@ -326,7 +341,7 @@ const WHOP_WEBHOOK_SECRET = process.env.WHOP_WEBHOOK_SECRET || '<WHOP_SECRET_RED
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟠 Alto |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `apps/hub/src/lib/db/*.ts` vs `packages/database/src/services/*.js` |
 
 **Descripción:**
@@ -513,7 +528,7 @@ Además `apps/hub/src/components/GameLauncherModal.tsx:106-107` quema `rank: 'OR
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟡 Medio |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `lib/db/settle.ts:55-61` · `api/games/lobby/route.ts:15-16,39-40,60-61,82-83` · `LeagueStandings.tsx:55,103-106,145-147,207` · `api/matches/history/route.ts:62` · `lib/db/matches.ts:16-17` |
 
 **Descripción:** Los repartos `$25/$15/$7/$3` y los puntos `+100/+20` están escritos literalmente en al menos 6 archivos distintos, tanto en backend como en frontend. También los 4 `game_id` y sus metadatos están duplicados en 5 lugares (`page.tsx:12-41`, `api/games/lobby/route.ts:4-93`, `components/passport-types.ts:26-31`, `LeagueStandings.tsx:11-16`, `GameLauncherModal.tsx:13-25`) y en `api/auth/register/route.ts:7`.
@@ -529,7 +544,7 @@ Además `apps/hub/src/components/GameLauncherModal.tsx:106-107` quema `rank: 'OR
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟡 Medio |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `AuthModal.tsx:105,111,133` · `WalletView.tsx:75,127,131` · `Navigation.tsx:126` · `PassportView.tsx:303` · `GameCard.tsx:83-84` · `LeagueStandings.tsx:105-119` · `globals.css:223,234-235` |
 
 **Descripción:** La Regla 3 de gobernanza prohíbe colores HEX arbitrarios, pero hay usos directos de `#ef4444`, `#dc2626`, `#fff`, `#ffffff`, `#22c55e`, `#16a34a`, `#059669`, `#000` y `rgba(210,105,26,.92)`. Además **ningún componente usa CSS Modules** (la Regla 1.4 de `AGENTS.md` los pide): todo son objetos `style={{}}` en línea.
@@ -563,7 +578,7 @@ Además `apps/hub/src/components/GameLauncherModal.tsx:106-107` quema `rank: 'OR
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | 🟡 Medio |
-| **Estado** | ⚠️ PARCIAL |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `apps/realtime-server/src/anticheat.js:263` · `apps/realtime-server/src/rooms.js:97-108` |
 
 **Descripción:** La detección de misma IP solo se activa con `NODE_ENV === 'production'` (`anticheat.js:263`). En `rooms.js:97,106` el modo dev además permite que dos pestañas del **mismo usuario** se emparejen entre sí (renombrando al segundo a `" (Tab 2)"`, `rooms.js:109`) y saltándose el bloqueo por colusión.
@@ -646,7 +661,7 @@ Un proceso huérfano de una ejecución anterior de `test:all` mantuvo el puerto 
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | ⚪ Bajo |
-| **Estado** | ❌ ABIERTO |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `apps/realtime-server/src/anticheat.js:255-274` · `apps/realtime-server/test/*` |
 
 **Descripción:** `detectCollusion` no está invocada por ninguna suite. Combinado con BUG-011 (desactivada en no-producción), la función tiene **cobertura cero**.
@@ -660,7 +675,7 @@ Un proceso huérfano de una ejecución anterior de `test:all` mantuvo el puerto 
 | Campo | Valor |
 | :--- | :--- |
 | **Severidad** | ⚪ Bajo |
-| **Estado** | ⚠️ PARCIAL |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
 | **Ubicación** | `apps/hub/src/app/api/payments/paypal/payout/route.ts:44-76` |
 
 **Descripción:** El endpoint valida el saldo, hace el débito atómico y registra el asiento `WITHDRAWAL`, pero **no invoca la API de PayPal Payouts**. El dinero sale del saldo del usuario sin que se emita ningún pago. Las variables `PAYPAL_CLIENT_ID`/`PAYPAL_SECRET` no están configuradas.

@@ -2,33 +2,57 @@ import pg from 'pg';
 const { Pool } = pg;
 
 /**
- * Cadena de conexión leída EXCLUSIVAMENTE del entorno.
- * No existe valor por defecto: un fallback silencioso a un secreto quemado en
- * el código es lo que causó el BUG-002 / BUG-021 de la auditoría.
+ * Pool de conexiones creado de forma PEREZOSA.
+ *
+ * ⚠️ Por qué perezoso y no al importar el módulo:
+ * Este paquete exporta también CONSTANTES de negocio (divisas, premios, deltas
+ * de MMR, catálogo de juegos) que consumen componentes de CLIENTE. Si la
+ * validación de DATABASE_URL se ejecutara al importar, cualquier componente
+ * cliente que importara una constante rompería la página, porque en el navegador
+ * esa variable no existe.
+ *
+ * La cadena se sigue leyendo EXCLUSIVAMENTE del entorno: no hay valor por
+ * defecto. Un fallback silencioso a un secreto quemado causó el BUG-002.
+ * El error aparece ahora en la primera consulta real, con mensaje accionable.
  *
  * Al ejecutar scripts de este paquete hay que cargar el entorno:
  *   node --env-file=../../.env src/migrate.js
  */
-const connectionString = process.env.DATABASE_URL;
+let poolInstance = null;
 
-if (!connectionString) {
-  throw new Error(
-    '[PlayWin Database] Falta la variable de entorno obligatoria "DATABASE_URL".\n' +
-      '  → Cárgala con: node --env-file=../../.env <script>\n' +
-      '  → Plantilla de referencia: .env.example'
-  );
+/** Devuelve el pool, creándolo en el primer uso. */
+export function getPool() {
+  if (poolInstance) return poolInstance;
+
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error(
+      '[PlayWin Database] Falta la variable de entorno obligatoria "DATABASE_URL".\n' +
+        '  → Cárgala con: node --env-file=../../.env <script>\n' +
+        '  → Plantilla de referencia: .env.example'
+    );
+  }
+
+  poolInstance = new Pool({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false,
+    },
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  });
+
+  return poolInstance;
 }
 
-// Pool de conexiones de alta disponibilidad optimizado para Neon Serverless
-export const pool = new Pool({
-  connectionString,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-});
+/**
+ * Acceso directo al pool, creándolo si hace falta.
+ *
+ * Es una FUNCIÓN a propósito: el pool se crea de forma perezosa (ver arriba),
+ * así que hay que pedirlo en el momento de usarlo. Los consumidores escriben
+ * `getPool().query(...)` en lugar de `pool.query(...)`.
+ */
 
 /**
  * Ejecuta una consulta SQL en el pool
@@ -36,12 +60,7 @@ export const pool = new Pool({
  * @param {Array<any>} [params] - Parámetros
  */
 export async function query(text, params = []) {
-  const start = Date.now();
-  const res = await pool.query(text, params);
-  const duration = Date.now() - start;
-  if (process.env.NODE_ENV !== 'production') {
-    // console.log(`[DB] ${text} (${duration}ms)`);
-  }
+  const res = await getPool().query(text, params);
   return res;
 }
 
@@ -52,7 +71,7 @@ export async function query(text, params = []) {
  * @returns {Promise<T>}
  */
 export async function withTransaction(callback) {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     await client.query('BEGIN');
     const result = await callback(client);

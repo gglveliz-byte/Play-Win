@@ -150,10 +150,37 @@ async function runTreasuryTests() {
       }),
     });
     const payoutData = await payoutRes.json();
-    console.log('✅ Retiro PayPal procesado:', payoutRes.status, payoutData);
 
-    const balCheck3 = await pool.query('SELECT wallet_balance FROM users WHERE id = $1;', [user.id]);
-    console.log('   Balance final tras retiro (-$25.00):', balCheck3.rows[0].wallet_balance, 'USD');
+    const balanceAntes = parseFloat(balCheck2.rows[0].wallet_balance);
+
+    if (payoutRes.status === 503 && payoutData.code === 'PAYOUT_NOT_CONFIGURED') {
+      // Comportamiento ESPERADO mientras no exista la integración real con
+      // PayPal: se rechaza sin tocar el saldo. Antes el endpoint debitaba y
+      // respondía "procesado exitosamente" sin emitir ningún pago (BUG-015).
+      console.log('✅ Retiro RECHAZADO correctamente (integración PayPal pendiente):', payoutRes.status);
+      console.log(`   Motivo: ${payoutData.error}`);
+
+      const balCheck3 = await pool.query('SELECT wallet_balance FROM users WHERE id = $1;', [user.id]);
+      const balanceDespues = parseFloat(balCheck3.rows[0].wallet_balance);
+      if (balanceDespues !== balanceAntes) {
+        throw new Error(
+          `El retiro rechazado NO debe tocar el saldo: antes $${balanceAntes}, después $${balanceDespues}`
+        );
+      }
+      console.log(`   ✅ Saldo intacto tras el rechazo: $${balanceDespues} USD`);
+    } else if (payoutRes.status === 200) {
+      // Camino de la integración real: el asiento debe quedar en PENDING.
+      console.log('✅ Retiro enviado a PayPal:', payoutRes.status, payoutData);
+      if (payoutData.status !== 'PENDING') {
+        throw new Error(
+          `Un retiro no puede nacer '${payoutData.status}': debe quedar PENDING hasta que PayPal confirme`
+        );
+      }
+      const balCheck3 = await pool.query('SELECT wallet_balance FROM users WHERE id = $1;', [user.id]);
+      console.log('   Balance final tras retiro (-$25.00):', balCheck3.rows[0].wallet_balance, 'USD');
+    } else {
+      throw new Error(`Respuesta inesperada del endpoint de retiro: HTTP ${payoutRes.status} ${JSON.stringify(payoutData)}`);
+    }
 
     // 5. Verificar extracto en wallet_ledger
     const ledgerRows = await pool.query('SELECT type, amount, status, provider FROM wallet_ledger WHERE user_id = $1 ORDER BY created_at ASC;', [user.id]);

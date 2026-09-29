@@ -268,7 +268,25 @@ export function validateTickPhysics(gameId, lastTick, currentTick, matchStartTim
 }
 
 /**
+ * Bandera explícita para permitir emparejar al mismo jugador consigo mismo.
+ *
+ * Antes esto dependía implícitamente de `NODE_ENV !== 'production'`: el
+ * comportamiento quedaba oculto en el entorno y no había forma de probarlo ni
+ * de activarlo a propósito. Ahora es una decisión declarada.
+ *
+ * Uso: ALLOW_SELF_MATCH=true  (solo desarrollo o pruebas automatizadas)
+ */
+export function isSelfMatchAllowed() {
+  return process.env.ALLOW_SELF_MATCH === 'true';
+}
+
+/**
  * 3. Detector de Colusión / Cuentas Espejo (Anti-Sybil Farming)
+ *
+ * Reglas:
+ *  - La misma cuenta jugando contra sí misma SIEMPRE es colusión.
+ *  - Dos cuentas distintas desde la MISMA IP es colusión salvo que se permita
+ *    explícitamente (desarrollo desde una sola máquina, NAT compartido…).
  */
 export function detectCollusion(entryA, entryB) {
   // Evitar que el mismo usuario juegue contra sí mismo
@@ -276,14 +294,14 @@ export function detectCollusion(entryA, entryB) {
     return { isCollusion: true, reason: 'SAME_ACCOUNT_MATCH' };
   }
 
-  // Si ambas conexiones provienen de la misma IP local o idéntica en producción
+  // Direcciones de bucle local: nunca cuentan como colusión entre cuentas.
+  const esBucleLocal = (ip) => !ip || ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+
   if (
-    process.env.NODE_ENV === 'production' &&
-    entryA.ip &&
-    entryB.ip &&
-    entryA.ip === entryB.ip &&
-    entryA.ip !== '127.0.0.1' &&
-    entryA.ip !== '::1'
+    !isSelfMatchAllowed() &&
+    !esBucleLocal(entryA.ip) &&
+    !esBucleLocal(entryB.ip) &&
+    entryA.ip === entryB.ip
   ) {
     return { isCollusion: true, reason: 'SAME_IP_COLLUSION' };
   }

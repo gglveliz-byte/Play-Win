@@ -2,7 +2,16 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { leagueService } from '@/lib/db';
 import { authLib } from '@/lib/auth';
+import { serverError } from '@/lib/api-response';
 
+/**
+ * Consulta la micro-liga del jugador (o una liga abierta si es invitado).
+ *
+ * La división se resuelve desde el pasaporte del jugador con
+ * `leagueService.assignPlayerToLeague`, que usa `resolveRankTier()`.
+ * Antes esta ruta forzaba 'BRONZE' en ambas llamadas, así que TODO jugador
+ * acababa en la división más baja sin importar su Skill Rating (BUG-019).
+ */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -13,17 +22,17 @@ export async function GET(req: Request) {
     const payload = token ? authLib.verifyToken(token) : null;
 
     if (payload?.userId) {
-      // Obtener o asegurar asignación a la liga de este juego
       let userLeague = await leagueService.getUserLeague(payload.userId, gameId);
       if (!userLeague) {
-        await leagueService.assignPlayerToLeague(payload.userId, gameId, 'BRONZE');
+        // Sin tercer argumento: la división se deriva del skill_rating real.
+        await leagueService.assignPlayerToLeague(payload.userId, gameId);
         userLeague = await leagueService.getUserLeague(payload.userId, gameId);
       }
       return NextResponse.json({ success: true, league: userLeague });
     }
 
-    // Si es invitado, mostrar tabla del grupo abierto actual
-    const openLeague = await leagueService.getOrCreateOpenLeague(gameId, 'BRONZE');
+    // Invitado: se le muestra la tabla de una liga abierta del juego.
+    const openLeague = await leagueService.getOrCreateOpenLeague(gameId);
     const standings = await leagueService.getLeagueStandings(openLeague.id);
 
     return NextResponse.json({
@@ -33,11 +42,7 @@ export async function GET(req: Request) {
         standings,
       },
     });
-  } catch (err: any) {
-    console.error('[API /leagues Error]', err);
-    return NextResponse.json(
-      { error: 'Error al consultar ligas.' },
-      { status: 500 }
-    );
+  } catch (err) {
+    return serverError(err, 'GET /api/leagues');
   }
 }

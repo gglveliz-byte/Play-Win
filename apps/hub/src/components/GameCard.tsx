@@ -80,7 +80,7 @@ export function GameCard({
               fontSize: '10px',
               fontWeight: 800,
               letterSpacing: '1px',
-              color: '#ffffff',
+              color: 'var(--on-dark)',
               background: 'rgba(210, 105, 26, 0.92)',
               backdropFilter: 'blur(8px)',
               padding: '4px 10px',

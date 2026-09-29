@@ -123,7 +123,7 @@ export function Navigation({
                 height: '24px',
                 borderRadius: '50%',
                 background: 'var(--orange)',
-                color: '#fff',
+                color: 'var(--on-dark)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -135,7 +135,7 @@ export function Navigation({
               <span style={{ fontWeight: 700, fontSize: '13px' }}>{user.username}</span>
               <span style={{
                 background: 'var(--ink)',
-                color: '#fff',
+                color: 'var(--on-dark)',
                 fontSize: '10px',
                 fontWeight: 800,
                 padding: '2px 8px',

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { pool } from './index.js';
+import { getPool } from './index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -12,7 +12,7 @@ async function runMigration() {
   const schemaPath = join(__dirname, 'schema.sql');
   const sql = readFileSync(schemaPath, 'utf8');
 
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     console.log('⚡ Conexión establecida con Neon. Aplicando tablas relacionales...');
     await client.query('BEGIN');
@@ -34,7 +34,7 @@ async function runMigration() {
     process.exit(1);
   } finally {
     client.release();
-    await pool.end();
+    await getPool().end();
   }
 }
 

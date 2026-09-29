@@ -4,7 +4,7 @@ import {
   matchService,
   leagueService,
   ledgerService,
-  pool,
+  getPool,
 } from '../src/index.js';
 
 async function runTests() {
@@ -76,7 +76,7 @@ async function runTests() {
     console.error('❌ Error en pruebas:', err);
     process.exit(1);
   } finally {
-    await pool.end();
+    await getPool().end();
   }
 }
 

@@ -1,19 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { GAMES, LEAGUE_PRIZE_POOL, PRIZE_SPLIT } from '@playwin/database';
 
 interface LeagueStandingsProps {
   currentUserId?: string;
   onLaunchGame: (gameId: string) => void;
   refreshKey?: number;
 }
-
-const GAMES = [
-  { id: 'carreras', name: 'Speed Horizon 3D' },
-  { id: 'flapy-flapy', name: 'Bati Vuelo 1v1' },
-  { id: 'space', name: 'Fuerza Espacial' },
-  { id: 'sky', name: 'Sky Runner 3D' },
-];
 
 export function LeagueStandings({ currentUserId, onLaunchGame, refreshKey }: LeagueStandingsProps) {
   const [selectedGame, setSelectedGame] = useState('carreras');
@@ -52,7 +46,7 @@ export function LeagueStandings({ currentUserId, onLaunchGame, refreshKey }: Lea
             Tabla de Posición Oficial (Grupo de 10)
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--mute)' }}>
-            Bolsa de premios semanal: <strong>$25.00 USD</strong> ($15.00 al 1º, $7.00 al 2º, $3.00 al 3º)
+            Bolsa de premios semanal: <strong>${LEAGUE_PRIZE_POOL.toFixed(2)} USD</strong> (${PRIZE_SPLIT[1].toFixed(2)} al 1º, ${PRIZE_SPLIT[2].toFixed(2)} al 2º, ${PRIZE_SPLIT[3].toFixed(2)} al 3º)
           </p>
         </div>
 
@@ -100,16 +94,16 @@ export function LeagueStandings({ currentUserId, onLaunchGame, refreshKey }: Lea
         }}>
           <div>
             <span style={{ fontSize: '11px', fontWeight: 900, color: 'var(--orange)', letterSpacing: '1px', textTransform: 'uppercase' }}>
-              BOLSA DE PREMIOS GARANTIZADA: $25.00 USD
+              BOLSA DE PREMIOS GARANTIZADA: ${LEAGUE_PRIZE_POOL.toFixed(2)} USD
             </span>
-            <div style={{ color: '#fff', fontSize: '15px', fontWeight: 800 }}>
-              🥇 1º Puesto: $15.00 USD • 🥈 2º Puesto: $7.00 USD • 🥉 3º Puesto: $3.00 USD
+            <div style={{ color: 'var(--on-dark)', fontSize: '15px', fontWeight: 800 }}>
+              🥇 1º Puesto: ${PRIZE_SPLIT[1].toFixed(2)} USD • 🥈 2º Puesto: ${PRIZE_SPLIT[2].toFixed(2)} USD • 🥉 3º Puesto: ${PRIZE_SPLIT[3].toFixed(2)} USD
             </div>
           </div>
           <div style={{
             background: 'rgba(255,255,255,0.15)',
             backdropFilter: 'blur(8px)',
-            color: '#fff',
+            color: 'var(--on-dark)',
             fontSize: '11px',
             fontWeight: 800,
             padding: '5px 14px',
@@ -141,10 +135,10 @@ export function LeagueStandings({ currentUserId, onLaunchGame, refreshKey }: Lea
               {standings.map((member: any, idx: number) => {
                 const isMe = member.user_id === currentUserId;
                 const rank = idx + 1;
-                let prize = '-';
-                if (rank === 1) prize = '$15.00 USD (1º)';
-                else if (rank === 2) prize = '$7.00 USD (2º)';
-                else if (rank === 3) prize = '$3.00 USD (3º)';
+                // Los importes salen de las constantes compartidas: antes estaban
+                // escritos a mano aquí y en otros cinco archivos (BUG-008).
+                const importePremio = (PRIZE_SPLIT as Record<number, number>)[rank];
+                const prize = importePremio ? `$${importePremio.toFixed(2)} USD (${rank}º)` : '-';
 
                 return (
                   <tr
@@ -164,7 +158,7 @@ export function LeagueStandings({ currentUserId, onLaunchGame, refreshKey }: Lea
                         height: '26px',
                         borderRadius: '50%',
                         background: rank <= 3 ? 'var(--ink)' : 'var(--pill-light)',
-                        color: rank <= 3 ? '#fff' : 'var(--ink)',
+                        color: rank <= 3 ? 'var(--on-dark)' : 'var(--ink)',
                         fontSize: '12px',
                         fontWeight: 800,
                       }}>
@@ -178,7 +172,7 @@ export function LeagueStandings({ currentUserId, onLaunchGame, refreshKey }: Lea
                           height: '30px',
                           borderRadius: '50%',
                           background: isMe ? 'var(--orange)' : 'var(--pill-light)',
-                          color: isMe ? '#fff' : 'var(--ink)',
+                          color: isMe ? 'var(--on-dark)' : 'var(--ink)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',

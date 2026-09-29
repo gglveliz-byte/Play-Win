@@ -1,6 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
+import { SEASON_POINTS } from '@playwin/database';
+
+/**
+ * Etiqueta de puntuación construida desde las constantes compartidas.
+ * Antes decía "Ganador: +100 SP (+25 MMR) | Derrota: +20 SP (-15 MMR)", que era
+ * doblemente falso: el MMR NO se mueve por un duelo (solo al cerrar la semana
+ * según la posición en la liga) y los valores estaban quemados (BUG-008).
+ */
+const ETIQUETA_PUNTOS =
+  `Ganador: +${SEASON_POINTS.WIN} SP | Derrota: +${SEASON_POINTS.LOSS} SP | El MMR se ajusta al cierre semanal, no por duelo`;
 
 interface GameLobbyViewProps {
   gameId: string;
@@ -27,7 +37,7 @@ export function GameLobbyView({
     objective: 'Supera a tu oponente sin estrellarte.',
     scoring: '+1 punto por avance físico.',
     suddenDeath: 'El primer jugador en colisionar pierde inmediatamente.',
-    seasonPoints: 'Ganador: +100 SP (+25 MMR) | Derrota: +20 SP (-15 MMR)',
+    seasonPoints: ETIQUETA_PUNTOS,
     controlsPC: [{ key: 'Teclas', label: 'Controles estándar' }],
     controlsMobile: [{ gesture: 'Táctil', label: 'Toques en pantalla' }],
   };
@@ -67,7 +77,7 @@ export function GameLobbyView({
               style={{
                 fontSize: '11px',
                 fontWeight: 800,
-                color: '#fff',
+                color: 'var(--on-dark)',
                 background: 'rgba(210, 105, 26, 0.9)',
                 padding: '3px 10px',
                 borderRadius: '999px',
@@ -82,11 +92,11 @@ export function GameLobbyView({
           </div>
 
           <div>
-            <h2 style={{ fontSize: '24px', fontWeight: 900, color: '#fff', margin: 0 }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--on-dark)', margin: 0 }}>
               {game.title}
             </h2>
             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', margin: '2px 0 0' }}>
-              {game.subtitle} • <span style={{ color: '#ffb366', fontWeight: 700 }}>{lobbyData?.divisionTier || 'DIVISIÓN ORO'}</span>
+              {game.subtitle} • <span style={{ color: 'var(--accent-on-dark)', fontWeight: 700 }}>{lobbyData?.viewer?.rankTier || 'SIN DIVISIÓN'}</span>
             </p>
           </div>
         </div>
@@ -103,7 +113,7 @@ export function GameLobbyView({
               <div style={{ background: 'var(--hero-bg-1)', borderRadius: '18px', padding: '16px 18px', border: '1px solid var(--line)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="brand-dot" style={{ background: '#1b8a36', boxShadow: '0 0 8px #1b8a36' }}></span>
+                    <span className="brand-dot" style={{ background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }}></span>
                     <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--ink)', letterSpacing: '1px', textTransform: 'uppercase' }}>
                       Pilotos Activos en este Juego
                     </span>
@@ -136,7 +146,7 @@ export function GameLobbyView({
                         </div>
                         <div>
                           <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink)' }}>{player.username}</div>
-                          <span style={{ fontSize: '10px', color: 'var(--mute)' }}>RATING {player.skill_rating || 1800} MMR</span>
+                          <span style={{ fontSize: '10px', color: 'var(--mute)' }}>RATING {player.skill_rating ?? '—'} MMR</span>
                         </div>
                       </div>
                       <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--orange)', background: 'rgba(210, 105, 26, 0.1)', padding: '2px 8px', borderRadius: '999px' }}>
@@ -170,13 +180,13 @@ export function GameLobbyView({
                     <div style={{ display: 'flex', gap: '4px', background: 'var(--pill-light)', padding: '2px', borderRadius: '999px' }}>
                       <button
                         onClick={() => setControlTab('pc')}
-                        style={{ border: 'none', padding: '3px 8px', borderRadius: '999px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', background: controlTab === 'pc' ? 'var(--pill-dark)' : 'transparent', color: controlTab === 'pc' ? '#fff' : 'var(--mute)' }}
+                        style={{ border: 'none', padding: '3px 8px', borderRadius: '999px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', background: controlTab === 'pc' ? 'var(--pill-dark)' : 'transparent', color: controlTab === 'pc' ? 'var(--on-dark)' : 'var(--mute)' }}
                       >
                         💻 PC / Teclado
                       </button>
                       <button
                         onClick={() => setControlTab('mobile')}
-                        style={{ border: 'none', padding: '3px 8px', borderRadius: '999px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', background: controlTab === 'mobile' ? 'var(--pill-dark)' : 'transparent', color: controlTab === 'mobile' ? '#fff' : 'var(--mute)' }}
+                        style={{ border: 'none', padding: '3px 8px', borderRadius: '999px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', background: controlTab === 'mobile' ? 'var(--pill-dark)' : 'transparent', color: controlTab === 'mobile' ? 'var(--on-dark)' : 'var(--mute)' }}
                       >
                         📱 Móvil / Táctil
                       </button>
@@ -211,7 +221,7 @@ export function GameLobbyView({
           <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="badge-chip">BOLSA SEMANAL: $25 USD</span>
-              <span style={{ fontSize: '11px', color: 'var(--mute)' }}>Emparejamiento por MMR</span>
+              <span style={{ fontSize: '11px', color: 'var(--mute)' }}>Rival de tu misma división</span>
             </div>
 
             <div style={{ display: 'flex', gap: '8px' }}>

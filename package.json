@@ -20,8 +20,11 @@
     "test:cyber": "node --env-file=.env.test apps/realtime-server/test/cybersecurity_suite.js",
     "test:email": "node --env-file=.env.test apps/hub/test/email_and_recovery_test.mjs",
     "test:history": "node --env-file=.env.test apps/hub/test/match_history_test.mjs",
+    "test:collusion": "node --env-file=.env.test apps/realtime-server/test/collusion_spec.js",
+    "test:leagues": "node --env-file=.env.test packages/database/test/league_integrity_spec.js",
+    "test:migrate": "node --env-file=.env.test packages/database/src/migrate-league-integrity.mjs",
     "test:governance": "node test/code_protection_governance_test.mjs",
-    "test:all": "npm run test:governance && npm run test:db && npm run test:duel && npm run test:treasury && npm run test:e2e && npm run test:anticheat && npm run test:cyber && npm run test:email && npm run test:history"
+    "test:all": "npm run test:governance && npm run test:db && npm run test:duel && npm run test:anticheat && npm run test:cyber && npm run test:collusion && npm run test:leagues && npm run test:treasury && npm run test:e2e && npm run test:email && npm run test:history"
   },
   "keywords": [
     "esports",

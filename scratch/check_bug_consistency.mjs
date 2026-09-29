@@ -48,23 +48,39 @@ console.log(`  Parciales      : ${parciales.length}`);
 console.log(`  Resueltos      : ${resueltos.length}`);
 console.log(`${'='.repeat(60)}`);
 
-// Validar contra lo que declara la tabla resumen del documento
-const declarado = raw.match(/\*\*(\d+) bugs catalogados\*\*\s*=\s*\*\*(\d+) abiertos\*\*\s*\+\s*\*\*(\d+) parciales\*\*\s*\+\s*\*\*(\d+) resueltos\*\*/);
-if (declarado) {
-  const [, dTotal, dAbiertos, dParciales, dResueltos] = declarado.map(Number);
-  console.log(
-    `\nLa tabla declara: ${dTotal} catalogados = ${dAbiertos} abiertos + ${dParciales} parciales + ${dResueltos} resueltos`
-  );
-  const reales = `${total} catalogados = ${abiertos.length} abiertos + ${parciales.length} parciales + ${resueltos.length} resueltos`;
-  console.log(`Realidad        : ${reales}`);
+// Validar contra lo que declara la tabla resumen del documento.
+// Acepta dos formatos: el detallado (abiertos + parciales + resueltos) y el de
+// cierre final (solo resueltos cuando ya no queda nada pendiente).
+const detallado = raw.match(
+  /\*\*(\d+) bugs catalogados\*\*\s*=\s*\*\*(\d+) abiertos\*\*\s*\+\s*\*\*(\d+) parciales\*\*\s*\+\s*\*\*(\d+) resueltos\*\*/
+);
+const cerrado = raw.match(/\*\*(\d+) bugs catalogados\s*=\s*(\d+) resueltos\s*·\s*(\d+) abiertos\s*·\s*(\d+) parciales\.\*\*/);
+
+if (detallado) {
+  const [, dTotal, dAbiertos, dParciales, dResueltos] = detallado.map(Number);
+  console.log(`\nLa tabla declara: ${dTotal} = ${dAbiertos} abiertos + ${dParciales} parciales + ${dResueltos} resueltos`);
+  console.log(`Realidad        : ${total} = ${abiertos.length} abiertos + ${parciales.length} parciales + ${resueltos.length} resueltos`);
   const ok =
     dTotal === total &&
     dAbiertos === abiertos.length &&
     dParciales === parciales.length &&
     dResueltos === resueltos.length;
-  console.log(ok ? '\n✅ CONTEO CONSISTENTE' : '\n❌ INCONSISTENCIA entre la tabla y las entradas');
+  console.log(ok ? '\n✅ CONTEO CONSISTENTE' : '\n❌ INCONSISTENCIA');
   process.exit(ok ? 0 : 1);
-} else {
-  console.log('\n⚠️  No se encontró la frase de resumen esperada en el documento.');
-  process.exit(2);
 }
+
+if (cerrado) {
+  const [, dTotal, dResueltos, dAbiertos, dParciales] = cerrado.map(Number);
+  console.log(`\nLa tabla declara: ${dTotal} catalogados = ${dResueltos} resueltos · ${dAbiertos} abiertos · ${dParciales} parciales`);
+  console.log(`Realidad        : ${total} catalogados = ${resueltos.length} resueltos · ${abiertos.length} abiertos · ${parciales.length} parciales`);
+  const ok =
+    dTotal === total &&
+    dResueltos === resueltos.length &&
+    dAbiertos === abiertos.length &&
+    dParciales === parciales.length;
+  console.log(ok ? '\n✅ CONTEO CONSISTENTE' : '\n❌ INCONSISTENCIA');
+  process.exit(ok ? 0 : 1);
+}
+
+console.log('\n⚠️  No se encontró una frase de resumen reconocible.');
+process.exit(2);
