@@ -459,6 +459,81 @@ RESULT: PROTOCOL OK — match resolved by server
 
 ---
 
+### 🔬 Hito C.1: Análisis de "la partida no arranca" · `VERIFICADO`
+
+**Fecha:** 2026-09-29 · **Bugs:** BUG-022 y BUG-024 detectados; BUG-023 resuelto
+
+* **Síntomas reportados:**
+  1. *"Inicié una partida y se quedó así… ¿por qué no sale el panel de espera?"* (1 jugador)
+  2. *"Ahora sí inicié con 2 personas: no valió, se quedó así"* (ambos coches parados)
+
+* **Método:** observación en vivo con el servidor levantado. **No se tocó código hasta tener datos.**
+
+#### Hallazgo 1 · El servidor de duelos estaba CAÍDO
+
+```
+$ node packages/database/scripts/diagnose.mjs
+  SERVIDOR DE DUELOS → ❌ SIN RESPUESTA: fetch failed
+  HUB                → EN LÍNEA (HTTP 200)
+```
+
+El Hub respondía; el servidor de duelos no. **Eso explica el síntoma 1 por completo.**
+
+#### Hallazgo 2 · El motor de duelos FUNCIONA (verificado en vivo)
+
+Se levantó el servidor y se observó una partida real de dos personas:
+
+```
+sala duel_carreras_a592113a · PLAYING · humanas=1 · bots=0
+A=progamer2026 · B=carlos_pro
+score: 0/115 → 0/615 → 366/687 → 2872/687 → 4385/2258 → 5696/5671
+→ MATCH_END: carlos_pro gana 6752 vs 6793 (HIGHER_SCORE, 23 s)
+```
+
+* Ambos marcadores **subían en paralelo**: los dos coches avanzaban de verdad.
+* La victoria se resolvió por **mayor distancia**, como dicta la regla de carreras.
+* El resultado **se persistió** en `match_records`.
+
+**Conclusión del síntoma 2:** no era un fallo del motor. Los coches están en la línea
+de salida porque la captura es de antes de empezar a moverse, o de un momento sin servidor.
+
+#### Hallazgo 3 · BUG-022 (nuevo, ABIERTO) — el SDK falla en silencio
+
+```javascript
+// packages/game-sdk/playwin-bridge.js:137-147
+socket.onclose = () => { if (isMatchLive) { /* aviso */ } };   // ← condicionado
+socket.onerror = () => { if (isMatchLive) showReconnectBanner(...) };
+```
+
+Si la conexión falla **antes** de empezar la partida, **el error no se muestra en
+ninguna parte**: el jugador mira el radar para siempre sin saber que el servidor no
+existe. Viola el principio de transparencia ya aplicado en el resto del proyecto
+(aviso de bot, panel de admin con errores visibles).
+
+#### Hallazgo 4 · BUG-024 (nuevo, ABIERTO) — bots apagados sin explicación
+
+Consecuencia directa de desactivar los bots: un jugador solo espera indefinidamente
+sin saber que no va a llegar nadie.
+
+#### Herramienta nueva
+
+[diagnose.mjs](packages/database/scripts/diagnose.mjs) responde de un vistazo:
+¿servidor en línea?, ¿bots encendidos?, ¿partidas vivas (humanas o de bot)?,
+¿alguien en cola?, ¿se registran resultados?
+
+#### Estado tras este hito
+
+| Métrica | Valor |
+| :--- | :--- |
+| Bugs catalogados | **24** |
+| ✅ Resueltos | **22** |
+| ❌ Abiertos | **2** — BUG-022 y BUG-024 (misma familia: el SDK no comunica) |
+
+* **Siguiente hito inmediato:** arreglar BUG-022 (mostrar el error siempre + timeout
+  de 10 s + botón REINTENTAR) y BUG-024 (mensaje honesto al esperar solo).
+
+---
+
 ## 🎯 Próximos Pasos Inmediatos
 
 > El orden responde a riesgo, no a novedad. Ver [AUDITORIA_BUGS.md](AUDITORIA_BUGS.md) para el detalle de cada uno.

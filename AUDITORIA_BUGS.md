@@ -134,15 +134,112 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
 | 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ |
-| 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ |
-| 🟡 **Medio** | **0 abiertos** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ |
+| 🟠 **Alto** | **1 abierto** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · **BUG-022** ❌ |
+| 🟡 **Medio** | **1 abierto** | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · **BUG-024** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **21 de 21** | Todos |
+| ✅ **Resueltos** | **22 de 24** | Todos menos BUG-022 y BUG-024 |
 
-> **Aritmética:** **21 bugs catalogados = 21 resueltos · 0 abiertos · 0 parciales.**
+> **Aritmética:** **24 bugs catalogados = 22 resueltos · 2 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
+>
+> **Los 2 abiertos son de la misma familia:** el SDK no comunica al jugador lo que ocurre cuando no puede conectar (BUG-022) ni cuando espera sin que nadie entre (BUG-024).
 
-### ✅ Cierre del bloque 3 (2026-09-29)
+---
+
+### 🟠 BUG-022 · El SDK falla en silencio cuando el servidor de duelos está caído
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🟠 Alto (UX crítico: el jugador cree que el sistema está roto) |
+| **Estado** | ❌ **ABIERTO** — detectado el 2026-09-29 durante el análisis de una partida que "no arrancaba" |
+| **Ubicación** | `packages/game-sdk/playwin-bridge.js:137-147` |
+
+**Síntoma reportado:** *"inicié una partida y se quedó así… ¿por qué no sale el panel de espera?"*
+
+**Causa raíz verificada:**
+
+```javascript
+socket.onclose = () => {
+  if (isMatchLive) { /* aviso de reconexión */ }   // ← SOLO si ya está en partida
+};
+socket.onerror = () => {
+  if (isMatchLive) showReconnectBanner(...);        // ← ídem
+};
+```
+
+Los dos manejadores de error están **condicionados a `isMatchLive`**. Si la conexión falla **antes** de que empiece la partida (caso normal: el jugador entra, el servidor está caído), el error **no se muestra en ninguna parte**.
+
+**Resultado:** el jugador se queda mirando la pantalla de radar indefinidamente, sin ningún mensaje. No puede distinguir *"no hay rivales"* de *"el servidor no existe"*.
+
+**Evidencia del diagnóstico:**
+
+```
+$ node packages/database/scripts/diagnose.mjs
+  SERVIDOR DE DUELOS → ❌ SIN RESPUESTA: fetch failed
+     → El servidor de duelos NO está corriendo.
+  HUB → EN LÍNEA (HTTP 200)
+```
+
+El Hub funcionaba, el servidor de duelos no, y **el SDK no lo dijo**.
+
+**Agravante:** no hay **timeout de conexión**. Si el WebSocket queda en `CONNECTING` indefinidamente (URL mal configurada, firewall), tampoco hay aviso.
+
+**Arreglo propuesto:**
+1. Mostrar el error de conexión **siempre**, no solo durante la partida.
+2. Añadir un **timeout de conexión** (10 s) que muestre *"No se pudo contactar con el servidor de duelos"* con la URL intentada.
+3. Ofrecer un botón **REINTENTAR** en esa pantalla.
+4. Cuando los bots están apagados y el jugador es el único en cola, explicarlo: *"Esperando rival humano. Si nadie entra, seguirás esperando."*
+
+---
+
+### 🟡 BUG-023 · El flujo de partida sí funciona, pero no hay forma de verlo
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🟡 Medio (falta de observabilidad, no de función) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `packages/database/scripts/diagnose.mjs` (nuevo) · `/health` del servidor de duelos |
+
+**Contexto:** el jugador reportó que una partida con 2 personas *"no valió, se quedó así"*. Al reproducirlo con el servidor levantado, **la partida funcionó perfectamente**:
+
+```
+sala duel_carreras_a592113a · PLAYING · humanas=1 · bots=0
+A=progamer2026 · B=carlos_pro
+score: 0/115 → 0/615 → 366/687 → 2872/687 → 4385/2258 → 5696/5671
+→ MATCH_END: carlos_pro gana 6752 vs 6793 (HIGHER_SCORE, 23s)
+```
+
+Ambos jugadores avanzaban y el resultado se persistió correctamente en `match_records`.
+
+**Conclusión:** el motor de duelos **es correcto**. Lo que fallaba era que **no existía ninguna forma de comprobarlo**: ni panel, ni logs visibles, ni endpoint con estado de las colas.
+
+**Arreglo aplicado:** `scripts/diagnose.mjs` responde de un vistazo a las tres preguntas útiles:
+- ¿Está el servidor de duelos en línea? ¿Con bots encendidos o apagados?
+- ¿Hay partidas vivas ahora mismo? ¿Humanas o contra bot? ¿Con qué marcador?
+- ¿Se están registrando resultados en la base de datos?
+
+```bash
+node --env-file=.env.test packages/database/scripts/diagnose.mjs
+```
+
+---
+
+### 🟡 BUG-024 · Los bots apagados dejan al jugador esperando sin explicación
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🟡 Medio |
+| **Estado** | ❌ **ABIERTO** — consecuencia directa de desactivar los bots |
+| **Ubicación** | `packages/game-sdk/playwin-bridge.js` (pantalla `#pw-screen-mm`) |
+
+**Contexto:** los bots se apagaron por decisión de producto (BUG-021). Efecto colateral: un jugador solo en la cola **espera indefinidamente** viendo el radar, sin saber que no va a llegar nadie.
+
+**Arreglo propuesto:** tras 15 s esperando, cambiar el texto del radar a algo honesto:
+> *"Esperando rival humano… Los rivales de entrenamiento están desactivados. Entra con otra cuenta para probar, o pide que activen los bots."*
+
+---
+
+### ✅ Resueltos en el bloque 3 (2026-09-29)
 
 | Bug | Arreglo | Verificación |
 | :--- | :--- | :--- |
