@@ -1,7 +1,5 @@
-// ==================================================================
-// PLAY WIN: SKY RUNNER 3D — CONTROLADOR PRINCIPAL
-// Orquesta estados, entrada, SDK y render. La física vive en physics.js.
-// ==================================================================
+// PLAY WIN: SKY RUNNER 3D — CONTROLADOR PRINCIPAL. Orquesta estados, entrada,
+// SDK y render; la física vive en physics.js.
 
 import { audioSys } from './audio.js';
 import { TrackManager } from './prng.js';
@@ -14,6 +12,7 @@ import {
   cameraInFront,
 } from './renderer.js';
 import { pasoDeFisica } from './physics.js';
+import { debugActivado, iniciarPanelDebug } from './debug.js';
 
 // GEOMETRÍA DE LA PISTA (una sola fuente de verdad). El renderer dibuja 7
 // carriles con `project(i - 3.5)`, así que la pista abarca [-3.5, 3.5]. Antes el
@@ -191,22 +190,12 @@ function setupControls() {
  *
  * ⚠️ TODOS los campos que la física lee o escribe deben estar en `estado`: si
  * falta uno, la lectura de vuelta lo deja en `undefined` y el juego se queda
- * mudo. Eso dejó el canvas en negro una vez (faltaba `gameState`).
+ * mudo (así se quedó el canvas en negro una vez, por `gameState`).
  */
 function updatePhysics() {
   const estado = {
-    gameState,
-    x, y, z, vy,
-    steerInput,
-    jumpHeld,
-    jumpBufferTimer,
-    touchDriving,
-    touchSteer,
-    keyLeft,
-    keyRight,
-    vistaPrevia,
-    pasosVivo,
-    puntuacion,
+    gameState, x, y, z, vy, steerInput, jumpHeld, jumpBufferTimer,
+    touchDriving, touchSteer, keyLeft, keyRight, vistaPrevia, pasosVivo, puntuacion,
     Clamp,
     Lerp,
   };
@@ -239,12 +228,7 @@ function updatePhysics() {
   gameState = estado.gameState ?? gameState;
 }
 
-/**
- * Deja el escenario listo para la siguiente partida.
- *
- * Se llama al terminar el duelo. Antes `onMatchEnd` sólo volvía a IDLE, y el
- * rival fantasma seguía "conectado" dibujándose con datos ya muertos.
- */
+/** Deja el escenario listo para la siguiente partida (al terminar el duelo). */
 function endMatch() {
   gameState = STATE_IDLE;
   rival.connected = false;
@@ -275,9 +259,8 @@ function gameLoop(timeMS = 0) {
   }
 
   const opp = window.PlayWin?.getOpponentState();
-  // El rival sólo existe DURANTE la partida. Antes, `rival.connected` seguía en
-  // true después de terminar un duelo y el fantasma se dibujaba con datos ya
-  // muertos, lo que contribuía a que la pantalla pareciera congelada.
+  // El rival sólo existe DURANTE la partida: fuera de ella el fantasma se
+  // dibujaba con datos de un duelo ya terminado.
   const enPartida = gameState === STATE_PLAYING || gameState === STATE_CRASHED;
   if (opp && rival.connected && enPartida) {
     rival.x = Lerp(0.22, rival.x, opp.x || 0);
@@ -285,8 +268,8 @@ function gameLoop(timeMS = 0) {
     rival.isAlive = opp.isAlive ?? true;
   }
 
-  // La cámara se queda donde está hasta que arranca la partida; `vistaPrevia`
-  // sólo añade un balanceo suave para que la vista previa no parezca muerta.
+  // `vistaPrevia` sólo balancea el encuadre antes de jugar, para que la espera no
+  // parezca una pantalla muerta. No simula avance.
   const camaraX = x + vistaPrevia;
 
   drawSkyAndStars(ctx, stars, canvasWidth, canvasHeight, z);
@@ -333,16 +316,26 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Envía la telemetría al servidor durante la partida.
   setInterval(() => {
     if (gameState === STATE_PLAYING && window.PlayWin?.isLive()) {
-      window.PlayWin.sendTick({
-        x,
-        y: z,
-        score: puntuacion,
-        isAlive: true,
-      });
+      window.PlayWin.sendTick({ x, y: z, score: puntuacion, isAlive: true });
     }
   }, 50);
+
+  // Diagnóstico en pantalla con ?debug=1. La implementación vive en debug.js.
+  if (debugActivado()) {
+    iniciarPanelDebug(() => ({
+      estado: gameState,
+      vivoSdk: window.PlayWin?.isLive?.() ?? '(sin SDK)',
+      puntuacion,
+      pasosVivo,
+      z,
+      rivalConectado: rival.connected,
+      rivalZ: rival.z,
+      semilla: semillaActual,
+    }));
+  }
 
   requestAnimationFrame(gameLoop);
 });

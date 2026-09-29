@@ -17,6 +17,7 @@ const FICHEROS = [
   'js/prng.js',
   'js/audio.js',
   'js/physics.js',
+  'js/debug.js',
 ];
 
 console.log('\n═══ SKY RUNNER 3D · FICHEROS SERVIDOS POR EL HUB ═══\n');
