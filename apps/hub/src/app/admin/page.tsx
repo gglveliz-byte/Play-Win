@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { LEDGER_TYPES } from '@playwin/database';
+// ⚠️ Componente de CLIENTE: solo constantes puras. El punto de entrada
+// principal de @playwin/database arrastra `pg`, que necesita `dns` y rompe el build.
+import { LEDGER_TYPES } from '@playwin/database/constants';
 
 /** Filas del resumen contable que devuelve /api/admin/metrics. */
 interface LedgerRow {

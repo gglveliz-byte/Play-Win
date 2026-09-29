@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { GAMES, LEAGUE_PRIZE_POOL, PRIZE_SPLIT } from '@playwin/database';
+// ⚠️ Importa SIEMPRE desde '@playwin/database/constants' en componentes de
+// CLIENTE. El punto de entrada principal arrastra el paquete `pg`, que requiere
+// módulos de Node (`dns`, `net`) inexistentes en el navegador y rompe el build.
+import { GAMES, LEAGUE_PRIZE_POOL, PRIZE_SPLIT } from '@playwin/database/constants';
 
 interface LeagueStandingsProps {
   currentUserId?: string;

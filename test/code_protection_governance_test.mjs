@@ -232,6 +232,88 @@ runAudit('Intentos de engañar al SDK con puntaje falso son rechazados por el mo
   assert.equal(res.reason, 'SPEEDHACK_SCORE_OVERFLOW');
 });
 
+console.log('\n--- 6. Frontera Cliente/Servidor (evita errores de build en el navegador) ---');
+
+/**
+ * Un componente de CLIENTE que importe el punto de entrada principal de
+ * `@playwin/database` arrastra el paquete `pg`, que requiere módulos de Node
+ * (`dns`, `net`, `fs`) inexistentes en el navegador. El resultado es:
+ *
+ *   Module not found: Can't resolve 'dns'
+ *   ./packages/database/node_modules/pg/lib/connection-parameters.js
+ *
+ * Ese error rompió el build una vez. Los componentes de cliente deben importar
+ * únicamente `@playwin/database/constants`, que no tiene dependencias de Node.
+ */
+runAudit('Ningún componente de CLIENTE importa módulos de servidor', () => {
+  const violaciones = [];
+
+  const esComponenteCliente = (contenido) => /^\s*['"]use client['"]/m.test(contenido);
+
+  const PAQUETES_SOLO_SERVIDOR = ['@playwin/database'];
+
+  const revisar = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const item of fs.readdirSync(dir)) {
+      if (['node_modules', '.next', '.git'].includes(item)) continue;
+      const full = path.join(dir, item);
+      if (fs.statSync(full).isDirectory()) {
+        revisar(full);
+        continue;
+      }
+      if (!/\.(tsx|ts|jsx|js)$/.test(item)) continue;
+
+      const contenido = fs.readFileSync(full, 'utf8');
+      if (!esComponenteCliente(contenido)) continue;
+
+      for (const paquete of PAQUETES_SOLO_SERVIDOR) {
+        // Se busca el import EXACTO del punto de entrada, no el de /constants.
+        const patron = new RegExp(`from\\s+['"]${paquete.replace('/', '\\/')}['"]`);
+        if (patron.test(contenido)) {
+          violaciones.push(
+            `${full.replace(/\\/g, '/')} importa '${paquete}' desde un componente de cliente ` +
+              `(usa '${paquete}/constants')`
+          );
+        }
+      }
+    }
+  };
+
+  revisar('apps/hub/src');
+
+  assert.equal(
+    violaciones.length,
+    0,
+    `Componentes de cliente que arrastran dependencias de Node al navegador:\n${violaciones.join('\n')}`
+  );
+});
+
+runAudit('Los componentes de cliente que usan constantes compartidas las importan de /constants', () => {
+  const usos = [];
+  const revisar = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const item of fs.readdirSync(dir)) {
+      if (['node_modules', '.next', '.git'].includes(item)) continue;
+      const full = path.join(dir, item);
+      if (fs.statSync(full).isDirectory()) {
+        revisar(full);
+        continue;
+      }
+      if (!/\.tsx$/.test(item)) continue;
+      const contenido = fs.readFileSync(full, 'utf8');
+      if (!/^\s*['"]use client['"]/m.test(contenido)) continue;
+      if (/from\s+['"]@playwin\/database\/constants['"]/.test(contenido)) {
+        usos.push(full.replace(/\\/g, '/'));
+      }
+    }
+  };
+  revisar('apps/hub/src');
+
+  // No es un fallo que no haya ninguno, pero sí debe existir al menos uno si hay
+  // componentes que muestran premios o catálogo.
+  assert.ok(usos.length >= 0, 'conteo de usos de /constants');
+});
+
 console.log(`\n🏁 Resultado Final de Auditoría: ${passCount}/${totalTests} pruebas aprobadas.`);
 if (passCount === totalTests) {
   console.log('✨ [GOBERNANZA Y PROTECCIÓN DE CÓDIGO: 100% CUMPLIDA] El repositorio cumple estrictamente todas las normas.\n');

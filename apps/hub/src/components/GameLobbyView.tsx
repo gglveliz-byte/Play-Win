@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { SEASON_POINTS } from '@playwin/database';
+// ⚠️ Componente de CLIENTE: solo puede importar las constantes puras.
+// El punto de entrada principal arrastra `pg` (requiere `dns`) y rompe el build.
+import { SEASON_POINTS } from '@playwin/database/constants';
 
 /**
  * Etiqueta de puntuación construida desde las constantes compartidas.

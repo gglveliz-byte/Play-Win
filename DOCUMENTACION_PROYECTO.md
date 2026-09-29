@@ -457,14 +457,45 @@ wallet_ledger   (id UUID PK, user_id FK→users, amount NUMERIC(12,2), currency,
 
 ### 6.8 Capa de datos
 
-Existen **dos implementaciones paralelas** de la misma capa de datos (ver BUG-003):
+> ✅ **Unificada el 2026-09-29 (BUG-003).** Antes existían dos implementaciones paralelas; ahora hay **una sola**.
 
-| Ruta | Consumidor real |
+| Ruta | Rol |
 | :--- | :--- |
-| `packages/database/src/services/*.js` | **El servidor de duelos** (`@playwin/database`) y las suites de test. Es la capa viva. |
-| `apps/hub/src/lib/db/*.ts` | Las API routes del Hub. Es una **copia duplicada**; `@playwin/database` está declarado como dependencia del Hub pero **nunca se importa**. |
+| `packages/database/src/services/*.js` | **ÚNICA implementación** de `userService`, `passportService`, `matchService`, `leagueService` y `ledgerService`. |
+| `packages/database/src/constants.js` | **ÚNICA fuente de verdad** de tipos de ledger, premios, deltas de MMR, divisiones, `resolveRankTier()` y catálogo de juegos. |
+| `apps/hub/src/lib/db/*.ts` | **Re-exportaciones** del paquete (ya no contienen lógica). Se conservan para no reescribir 15 rutas. |
+| `apps/hub/src/lib/db/settle.ts` | Excepción: el cierre semanal de ligas solo existe aquí. |
+| `apps/hub/src/lib/db/index.ts` | Pool del Hub, creado de forma **perezosa**. |
 
-Servicios disponibles (mismos nombres en ambas capas): `userService` · `passportService` · `matchService` · `leagueService` · `ledgerService` · `settleEngine`.
+### 🔴 REGLA CRÍTICA: frontera cliente/servidor
+
+`@playwin/database` expone **dos puntos de entrada** y confundirlos **rompe el build**:
+
+| Punto de entrada | Quién puede usarlo | Qué incluye |
+| :--- | :--- | :--- |
+| `@playwin/database` | **Solo servidor** (API routes, libs de servidor, scripts) | Servicios + pool de `pg` + constantes |
+| `@playwin/database/constants` | **Servidor Y cliente** | Solo constantes puras, **sin dependencias de Node** |
+
+**Por qué:** el punto de entrada principal importa `pg`, que hace `require('dns')`, `require('net')` y `require('fs')`. Esos módulos **no existen en el navegador**. Si un componente con `'use client'` los arrastra, el build falla con:
+
+```
+Module not found: Can't resolve 'dns'
+./packages/database/node_modules/pg/lib/connection-parameters.js
+  Import trace: Client Component Browser
+```
+
+**Cómo evitarlo:**
+
+```tsx
+'use client';
+// ❌ MAL: arrastra pg al navegador y rompe el build
+import { GAMES } from '@playwin/database';
+
+// ✅ BIEN: solo constantes puras
+import { GAMES } from '@playwin/database/constants';
+```
+
+> 🛡️ **Protección automática:** `npm run test:governance` incluye la prueba *"Ningún componente de CLIENTE importa módulos de servidor"* (sección 6), que falla con el mensaje exacto indicando el archivo y el import correcto. **No se puede reintroducir este error sin que la suite lo detecte.**
 
 ---
 

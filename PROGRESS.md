@@ -431,6 +431,34 @@ RESULT: PROTOCOL OK — match resolved by server
 
 ---
 
+### 🔧 Corrección posterior: frontera cliente/servidor en `@playwin/database` · `VERIFICADO`
+
+**Fecha:** 2026-09-29 · **Origen:** error de build detectado en el navegador
+
+* **Síntoma:**
+  ```
+  Module not found: Can't resolve 'dns'
+  ./packages/database/node_modules/pg/lib/connection-parameters.js
+    Import trace: Client Component Browser
+  ```
+* **Causa raíz:** al unificar la capa de datos (BUG-003) y conectar las constantes compartidas, **cuatro componentes de cliente** (`LeagueStandings`, `GameLobbyView`, `admin/page`) empezaron a importar el **punto de entrada principal** de `@playwin/database`. Ese paquete importa `pg`, que hace `require('dns')` / `require('net')` / `require('fs')` — módulos que **no existen en el navegador**.
+* **Intento fallido:** convertir el pool a creación perezosa **no bastó**. Evitaba el `throw` al importar, pero el bundler de cliente **sigue intentando resolver `pg`** y por tanto `dns`.
+* **Arreglo correcto:** **dos puntos de entrada** en el paquete mediante `exports`:
+
+  | Punto de entrada | Quién lo usa | Contenido |
+  | :--- | :--- | :--- |
+  | `@playwin/database` | Solo servidor | Servicios + pool de `pg` + constantes |
+  | `@playwin/database/constants` | Servidor **y cliente** | Solo constantes puras, cero dependencias de Node |
+
+* **Verificación:**
+  * `NEXT_DIST_DIR=.next-verify2 npx next build` → **`✓ Compiled successfully in 7.4s`** + TypeScript OK. El error de `dns` desapareció.
+  * Añadida la prueba **"Ningún componente de CLIENTE importa módulos de servidor"** a la suite de gobernanza → **11/11**.
+  * **Probada en negativo:** se reintrodujo el import incorrecto a propósito y la suite **falló con el mensaje exacto** señalando el archivo y el import correcto. Restaurado después.
+* **Herramienta nueva:** `NEXT_DIST_DIR` permite compilar a un directorio alternativo para verificar sin tocar el `.next` en uso.
+* **Documentado como regla permanente** en [DOCUMENTACION_PROYECTO.md](DOCUMENTACION_PROYECTO.md) → sección 6.8.
+
+---
+
 ## 🎯 Próximos Pasos Inmediatos
 
 > El orden responde a riesgo, no a novedad. Ver [AUDITORIA_BUGS.md](AUDITORIA_BUGS.md) para el detalle de cada uno.

@@ -10,3 +10,6 @@ build/
 .env
 .env.*
 !.env.example
+
+# Directorios de compilación de verificación (NEXT_DIST_DIR)
+.next-verify*/
