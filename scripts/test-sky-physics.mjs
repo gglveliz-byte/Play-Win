@@ -113,5 +113,29 @@ const zAntes = stFin.z;
 for (let i = 0; i < 300; i++) pasoDeFisica(stFin, deps(pistaFin, []));
 comprobar('el escenario no se mueve solo', stFin.z === zAntes, `z = ${stFin.z}`);
 
+// ── 6. NINGÚN campo del estado se pierde al pasar por la física ─────────────
+//
+// Este es el fallo que dejó el canvas EN NEGRO: el motor copiaba el estado, se lo
+// pasaba a la física y lo leía de vuelta, pero un campo se quedaba fuera de la
+// copia y volvía como `undefined`. Con `gameState` en undefined ninguna rama de
+// la simulación se ejecuta y no se dibuja nada. Se comprueba campo por campo.
+console.log('\n  Integridad del estado (el fallo del canvas en negro):');
+const CAMPOS = ['gameState', 'x', 'y', 'z', 'vy', 'steerInput', 'jumpHeld', 'jumpBufferTimer',
+  'touchDriving', 'touchSteer', 'keyLeft', 'keyRight', 'vistaPrevia', 'pasosVivo', 'puntuacion'];
+
+for (const campo of CAMPOS) {
+  const st = nuevoEstado({ gameState: 'PLAYING' });
+  const antes = st[campo];
+  pasoDeFisica(st, deps(new TrackManager(1), []));
+  const despues = st[campo];
+  const sePerdio = despues === undefined && antes !== undefined;
+  comprobar(`  ${campo.padEnd(17)} sobrevive`, !sePerdio, `antes ${JSON.stringify(antes)} -> después ${JSON.stringify(despues)}`);
+}
+
+// `gameState` es el crítico: si se pierde, no se dibuja NADA.
+const stCritico = nuevoEstado({ gameState: 'PLAYING' });
+pasoDeFisica(stCritico, deps(new TrackManager(1), []));
+comprobar('el estado del juego NO queda indefinido (causa del canvas negro)', stCritico.gameState !== undefined, `gameState = ${JSON.stringify(stCritico.gameState)}`);
+
 console.log(`\n${fallos === 0 ? '🎉 FÍSICA CORRECTA' : `❌ ${fallos} comprobación(es) fallaron`}\n`);
 process.exitCode = fallos === 0 ? 0 : 1;

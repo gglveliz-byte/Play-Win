@@ -1,6 +1,6 @@
 // ==================================================================
-// PLAY WIN: SKY RUNNER 3D — MAIN GAME CONTROLLER
-// Bucle físico determinista 60Hz, Ghost Rival e integración PlayWin SDK (< 260 líneas)
+// PLAY WIN: SKY RUNNER 3D — CONTROLADOR PRINCIPAL
+// Orquesta estados, entrada, SDK y render. La física vive en physics.js.
 // ==================================================================
 
 import { audioSys } from './audio.js';
@@ -15,18 +15,10 @@ import {
 } from './renderer.js';
 import { pasoDeFisica } from './physics.js';
 
-// ==================================================================
-// GEOMETRÍA DE LA PISTA (una sola fuente de verdad)
-// ------------------------------------------------------------------
-// El renderer dibuja 7 carriles con `project(i - 3.5, ...)`, así que el carril
-// `i` ocupa la banda [i-3.5, i-2.5] y la pista completa abarca [-3.5, 3.5].
-//
-// Antes, el motor limitaba el movimiento a [-4.2, 4.2] (más ancho que la pista)
-// y calculaba el carril con `Math.round(x + 3)`, que devuelve valores de -1 a 7.
-// Los carriles válidos son 0..6, así que en los extremos la consulta
-// `row[columna]` daba `undefined`, el jugador se consideraba fuera de la pista y
-// CAÍA Y MORÍA sin haber hecho nada malo. Le pasaba en 2 de cada 9 posiciones.
-// ==================================================================
+// GEOMETRÍA DE LA PISTA (una sola fuente de verdad). El renderer dibuja 7
+// carriles con `project(i - 3.5)`, así que la pista abarca [-3.5, 3.5]. Antes el
+// motor permitía [-4.2, 4.2] y usaba `round(x + 3)` (da -1..7): en los extremos
+// `row[columna]` era undefined y el jugador CAÍA sin haber fallado.
 const CARRILES = 7;
 
 /** Centro del carril ocupado por la posición `x`, siempre dentro de 0..6. */
@@ -34,13 +26,11 @@ function carrilDe(x) {
   const col = Math.floor(x + CARRILES / 2);
   return Math.min(CARRILES - 1, Math.max(0, col));
 }
-
 /** Límite de movimiento: mantiene al jugador sobre la pista, nunca al borde. */
 const LIMITE_X = CARRILES / 2 - 0.1;
 
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d', { alpha: false });
-
 let canvasWidth = window.innerWidth;
 let canvasHeight = window.innerHeight;
 let isPortrait = canvasHeight > canvasWidth;
@@ -197,17 +187,28 @@ function setupControls() {
 }
 
 /**
- * Avanza la simulación un paso.
+ * Avanza la simulación un paso. El cálculo vive en `physics.js`.
  *
- * El cálculo vive en `physics.js`: aquí sólo se le pasa el estado y se recogen
- * los cambios. Mantener las variables de módulo evita reescribir todo el archivo
- * y el coste es copiar unos números 60 veces por segundo: despreciable.
+ * ⚠️ TODOS los campos que la física lee o escribe deben estar en `estado`: si
+ * falta uno, la lectura de vuelta lo deja en `undefined` y el juego se queda
+ * mudo. Eso dejó el canvas en negro una vez (faltaba `gameState`).
  */
 function updatePhysics() {
   const estado = {
-    gameState, x, y, z, vy, steerInput, jumpHeld, jumpBufferTimer,
-    touchDriving, touchSteer, keyLeft, keyRight, vistaPrevia, pasosVivo, puntuacion,
-    Clamp, Lerp,
+    gameState,
+    x, y, z, vy,
+    steerInput,
+    jumpHeld,
+    jumpBufferTimer,
+    touchDriving,
+    touchSteer,
+    keyLeft,
+    keyRight,
+    vistaPrevia,
+    pasosVivo,
+    puntuacion,
+    Clamp,
+    Lerp,
   };
 
   pasoDeFisica(estado, {
@@ -219,9 +220,23 @@ function updatePhysics() {
   });
 
   // Devuelve los valores al módulo.
-  ({ x, y, z, vy, steerInput, jumpHeld, jumpBufferTimer, touchDriving,
-     touchSteer, keyLeft, keyRight, vistaPrevia, pasosVivo, puntuacion, gameState } = estado);
-}
+  x = estado.x;
+  y = estado.y;
+  z = estado.z;
+  vy = estado.vy;
+  steerInput = estado.steerInput;
+  jumpHeld = estado.jumpHeld;
+  jumpBufferTimer = estado.jumpBufferTimer;
+  touchDriving = estado.touchDriving;
+  touchSteer = estado.touchSteer;
+  keyLeft = estado.keyLeft;
+  keyRight = estado.keyRight;
+  vistaPrevia = estado.vistaPrevia;
+  pasosVivo = estado.pasosVivo;
+  puntuacion = estado.puntuacion;
+  // Si este campo llegara a faltar arriba, el estado del juego quedaría
+  // `undefined` y no se dibujaría nada. Se protege explícitamente.
+  gameState = estado.gameState ?? gameState;
 }
 
 /**
