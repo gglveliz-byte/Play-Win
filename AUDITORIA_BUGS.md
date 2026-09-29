@@ -133,13 +133,13 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 
 | Severidad | Cantidad | IDs |
 | :--- | :--- | :--- |
-| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ |
+| 🔴 **Crítico** | **0 abiertos** | ~~BUG-001~~ ✅ · ~~BUG-002~~ ✅ · ~~BUG-025~~ ✅ · ~~BUG-026~~ ✅ · ~~BUG-029~~ ✅ · ~~BUG-030~~ ✅ · ~~BUG-032~~ ✅ · ~~BUG-034~~ ✅ · ~~BUG-035~~ ✅ · ~~BUG-036~~ ✅ · ~~BUG-037~~ ✅ |
 | 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
-| 🟡 **Medio** | **2 abiertos** (BUG-028 · BUG-033) | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-033** ❌ |
+| 🟡 **Medio** | **2 abiertos** (BUG-028 · BUG-033) | ~~BUG-038~~ ✅ | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-033** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **32 de 34** | Todos menos BUG-028 y BUG-033 |
+| ✅ **Resueltos** | **35 de 37** | Todos menos BUG-028 y BUG-033 |
 
-> **Aritmética:** **34 bugs catalogados = 32 resueltos · 2 abiertos · 0 parciales.**
+> **Aritmética:** **37 bugs catalogados = 35 resueltos · 2 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
 >
 > **Los abiertos (BUG-028 y BUG-033) no son fallos de funcionamiento: son capas de UI**
@@ -210,6 +210,103 @@ servidor no reinicia nada: sería un botón muerto).
 **Verificación:** `check-game-dom.mjs space` → ✅ 32/32 sin ausencias · protocolo real del
 juego completo (`MATCH_WAITING → MATCH_START → MATCH_LIVE → RIVAL_TICK`) · el SDK entrega
 `onMatchReady → onMatchLive`.
+
+---
+
+### 🔴 BUG-036 · Sky Runner: la bola NUNCA se movía en pantalla (cámara = jugador)
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (el juego parecía no responder a los controles) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/hub/public/games/sky/js/renderer.js` (8 proyecciones) |
+
+**Síntoma reportado:** *"la sombrita visual del enemigo debe tener sentido real de su posición, actualmente no se muestra bien"*.
+
+**Causa raíz — una resta que siempre daba cero:**
+
+```javascript
+// project() calcula:
+screenX = canvasWidth / 2 + (px - camX + curva) * scale;
+//                           ^^^^^^^^^^ si ambos valen lo mismo, esto es 0 SIEMPRE
+
+// Y el renderer pasaba la MISMA variable en los dos huecos:
+project(x, y, dz, …, /* px */ x, /* camX */ x)
+```
+
+`drawTrack` sí usaba `camX = x` (la cámara) correctamente, pero `drawPlayerBall` y
+`drawRivalGhost` pasaban la **posición del jugador** en ambos huecos. Resultado: **la bola, su
+sombra y el rival fantasma se dibujaban clavados en el centro horizontal de la pantalla**. El
+jugador se movía de verdad por los carriles, pero **en pantalla nada se movía**: parecía que
+los controles no funcionaban.
+
+**Arreglo:** la cámara se declara explícitamente y **las 8 proyecciones la usan**:
+
+```javascript
+export const cameraX = 0;   // la cámara se queda en el centro del mundo
+```
+
+El motor limita al jugador a `x ∈ [-3.4, 3.4]` y los 7 carriles abarcan `[-3.5, 3.5]`, así que
+con la cámara centrada **toda la pista cabe en pantalla y el jugador se desplaza sobre ella**.
+
+**Verificado:** la bola ahora recorre **de 136 px a 1144 px** sobre un lienzo de 1280, cruza el
+centro en ambos sentidos y la sombra la acompaña.
+
+---
+
+### 🔴 BUG-037 · Sky Runner: la bola se dibujaba hundida en la pista
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (la bola no parecía estar sobre la pista) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/hub/public/games/sky/js/renderer.js` · `drawPlayerBall` |
+
+**Cómo se encontró:** el test de geometría midió la separación entre la bola y su sombra y
+salió **negativa (−58.8 px)**: en esta proyección `+y` **sube** en pantalla, así que un valor
+negativo significaba que **la bola se pintaba 58.8 px por debajo del suelo**, hundida en la
+pista, en vez de rodar por encima.
+
+**Causa:** el centro de la esfera se proyectaba con `y + 0.35` **y** la sombra con `y`, sin
+relación con el radio real. La geometría estaba repartida y sin una fuente de verdad.
+
+**Arreglo:** el radio se declara como constante y **ambos** lo respetan:
+
+```javascript
+export const RADIO_BOLA = 0.35;   // la bola rueda SOBRE la pista
+```
+
+**Verificado:** la bola se dibuja exactamente **58.8 px por encima** de su sombra (justo el
+radio proyectado) y **nunca queda hundida**.
+
+---
+
+### 🟡 BUG-038 · Sky Runner: al morir, el escenario se movía para siempre
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🟡 Medio (el juego no se recuperaba tras el duelo) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/hub/public/games/sky/js/game.js` · `onMatchEnd` |
+
+**Síntoma reportado:** *"falló enorme, ambos murieron al mismo tiempo y se quedó ahí"*.
+
+**Dos causas, las dos en el final del duelo:**
+
+1. **`onMatchEnd` sólo ponía `STATE_IDLE`**, y ese estado **avanza la pista indefinidamente**
+   (`z += 0.12`). Tras morir, el jugador veía el escenario desplazarse para siempre, sin final
+   ni reinicio: parecía colgado aunque el motor siguiera vivo.
+2. **El rival fantasma seguía "conectado"** con datos de una partida ya terminada, así que se
+   dibujaba con posiciones muertas.
+
+> **Sobre el doble choque:** que los dos mueran casi a la vez **no es un fallo**. La pista es
+> determinista (misma semilla → mismo circuito), así que dos jugadores igual de rápidos caen en
+> el mismo hueco. El servidor lo resuelve bien: el primero que avisa cierra el duelo por
+> `OPPONENT_CRASH` y gana el rival; el aviso del segundo se descarta porque **no se puede
+> perder dos veces**. El problema no era ése, sino que el perdedor no veía su resultado.
+
+**Arreglo:** nuevo `endMatch()`, que además de volver a `IDLE` **desconecta al rival fantasma y
+reinicia el escenario con la semilla del duelo** (guardada en `semillaActual`).
 
 ---
 

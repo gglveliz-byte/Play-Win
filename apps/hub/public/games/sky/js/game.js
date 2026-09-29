@@ -58,6 +58,10 @@ window.addEventListener('orientationchange', () => setTimeout(handleResize, 150)
 const Clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 const Lerp = (p, a, b) => a + Clamp(p, 0, 1) * (b - a);
 
+// Semilla de la partida en curso: la fija el servidor en `onMatchReady` y se
+// conserva para poder reiniciar el escenario al terminar el duelo.
+let semillaActual = 123456;
+
 const STATE_IDLE = 'IDLE';
 const STATE_READY = 'READY';
 const STATE_PLAYING = 'PLAYING';
@@ -85,6 +89,7 @@ const rival = {
 };
 
 function resetGame(seed = 123456) {
+  semillaActual = seed;
   x = 0;
   y = 0;
   z = 0;
@@ -221,6 +226,10 @@ function updatePhysics() {
     }
 
     if (y <= -4) {
+      // `notifyCrash()` sólo avisa si la partida sigue viva. Si el rival se
+      // estrelló primero, el servidor ya cerró el duelo y este aviso se descarta
+      // (correcto: no se puede perder dos veces). El servidor resuelve igual por
+      // 'OPPONENT_CRASH', así que el jugador recibe su resultado.
       gameState = STATE_CRASHED;
       audioSys.playGameOver();
       window.PlayWin?.notifyCrash();
@@ -230,6 +239,24 @@ function updatePhysics() {
   } else if (gameState === STATE_CRASHED) {
     if (y > -15) y += (vy -= 0.006);
   }
+}
+
+/**
+ * Deja el escenario listo para la siguiente partida.
+ *
+ * Se llama al terminar el duelo. ANTES, `onMatchEnd` sólo ponía `STATE_IDLE`, y
+ * ese estado sigue avanzando la pista indefinidamente (`z += 0.12`), así que tras
+ * morir el jugador veía el escenario desplazarse para siempre sin ningún final:
+ * parecía que el juego se había quedado colgado. Además el rival fantasma seguía
+ * conectado y se dibujaba con datos ya muertos.
+ */
+function endMatch() {
+  gameState = STATE_IDLE;
+  rival.connected = false;
+  rival.isAlive = true;
+  rival.x = 0;
+  rival.z = 0;
+  resetGame(semillaActual);
 }
 
 let frameTimeLastMS = 0;
@@ -297,7 +324,7 @@ window.addEventListener('DOMContentLoaded', () => {
           ensureFocus();
         },
         onMatchEnd: () => {
-          gameState = STATE_IDLE;
+          endMatch();
         },
       },
     });
