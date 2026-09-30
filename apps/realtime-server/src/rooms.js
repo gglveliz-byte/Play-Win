@@ -8,18 +8,13 @@ import { removeFromQueues, handleInMatchDisconnect } from './disconnect-handler.
 import { startMatchClock, cancelMatchClock, resumenPorTiempo, resolverDobleCaida, MOTIVO_TIEMPO_AGOTADO } from './match-clock.js';
 import { handlePlayerTick as procesarTick } from './tick-handler.js';
 import { cerrarEnEmpate, cerrarConGanador } from './match-end.js';
+import { vigilarAbandonoDeSala } from './stall-watch.js';
 
-/**
- * Ventana para escuchar la caída del rival antes de cerrar un duelo de
- * supervivencia. Si los dos caen casi a la vez, ambos avisos llegan dentro de
- * este plazo y se puede comparar quién aguantó más en lugar de decidir por azar.
- */
+/** Ventana para escuchar la caída del rival antes de cerrar: si los dos caen casi
+ * a la vez, los dos avisos llegan dentro y se compara quién aguantó más. */
 const VENTANA_CAIDA_MS = 400;
 
-/**
- * Gestor de salas 1v1 y árbitro en tiempo real con Anti-Cheat (< 350 líneas)
- * Cumple AGENTS.md (Zero Client Trust) y playwin-code-governance.
- */
+/** Gestor de salas 1v1 y árbitro en tiempo real con Anti-Cheat (Zero Client Trust). */
 export class RoomManager {
   /**
    * @param {object} [options]
@@ -65,10 +60,7 @@ export class RoomManager {
     this.rooms.set(room.roomId, room);
     this.socketToRoom.set(entryA.socket, room.roomId);
     this.socketToRoom.set(entryB.socket, room.roomId);
-    // Reloj máximo: evita que un duelo entre dos jugadores que sobreviven se
-    // quede abierto para siempre sin resultado.
-    // Tope de duración: sin él, dos jugadores que sobreviven dejarían la sala abierta sin resultado.
-    startMatchClock(room, (sala, motivo) => this._resolveScoreWinner(sala, motivo), (id) => this.rooms.get(id));
+    this._armarRelojes(room);
   }
 
   async _startGhostMatch(gameId, entry) {
@@ -78,8 +70,7 @@ export class RoomManager {
       getRoom: (roomId) => this.rooms.get(roomId),
       send: this._send.bind(this),
       resolveScore: (room) => this._resolveScoreWinner(room),
-      finishMatch: (room, winner, loser, reason, summary, wp, lp) =>
-        this._finishMatch(room, winner, loser, reason, summary, wp, lp),
+      finishMatch: (room, w, l, reason, summary, wp, lp) => this._finalizarDuelo(room, w, l, reason, summary, wp),
       socket: entry.socket,
     });
 
@@ -87,8 +78,19 @@ export class RoomManager {
     targetRoomId = roomId;
     this.rooms.set(roomId, room);
     this.socketToRoom.set(entry.socket, roomId);
-    // Tope de duración: sin él, dos jugadores que sobreviven dejarían la sala abierta sin resultado.
+    this._armarRelojes(room);
+  }
+
+  /**
+   * Arma los relojes de una sala nueva: tope de duración y detección de
+   * abandono. Sin ellos, un duelo entre dos supervivientes —o con los dos
+   * motores congelados— se quedaba abierto SIN RESULTADO.
+   *
+   * @param {object} room Sala en juego.
+   */
+  _armarRelojes(room) {
     startMatchClock(room, (sala, motivo) => this._resolveScoreWinner(sala, motivo), (id) => this.rooms.get(id));
+    vigilarAbandonoDeSala(room, (id) => this.rooms.get(id), (sala, motivo) => this._resolveScoreWinner(sala, motivo));
   }
 
   /**
@@ -114,20 +116,31 @@ export class RoomManager {
     );
   }
 
+  /**
+   * Decide el ganador comparando puntuaciones (tiempo agotado o abandono).
+   *
+   * Si los dos empatan EXACTAMENTE, es empate: no se elige a uno por posición.
+   * Antes el resumen decía «Empate a N» mientras se daban 100 puntos de victoria
+   * a uno y 20 al otro, así que salían ¡VICTORIA! y DERROTA en la misma partida.
+   *
+   * @param {object} room Sala del duelo.
+   * @param {string} [motivo] Código para el historial.
+   */
   _resolveScoreWinner(room, motivo = 'HIGHER_SCORE') {
-    if (room.finishTimer) clearTimeout(room.finishTimer);
-    cancelMatchClock(room);
-    room.status = 'FINISHED';
-    if (room.ghostSimulation) room.ghostSimulation.stop();
-    const p1 = room.playerA.score || 0, p2 = room.playerB.score || 0;
-    const winner = p1 >= p2 ? room.playerA : room.playerB;
-    const loser = winner === room.playerA ? room.playerB : room.playerA;
-    const resumen = p1 === p2
-      ? `Empate a ${p1}.`
-      : motivo === MOTIVO_TIEMPO_AGOTADO
-        ? resumenPorTiempo(winner.username, winner.score)
-        : `${winner.username} ganó con ${winner.score}.`;
-    this._finishMatch(room, winner, loser, motivo, resumen, 100, 20);
+    const p1 = room.playerA.score || 0;
+    const p2 = room.playerB.score || 0;
+    if (p1 === p2) {
+      this._finalizarEmpate(room, `Los dos aguantaron ${p1}s. Empate técnico.`);
+      return;
+    }
+
+    const ganador = p1 > p2 ? room.playerA : room.playerB;
+    const perdedor = ganador === room.playerA ? room.playerB : room.playerA;
+    const resumen = motivo === MOTIVO_TIEMPO_AGOTADO
+      ? resumenPorTiempo(ganador.username, ganador.score)
+      : `${ganador.username} ganó con ${ganador.score}.`;
+
+    this._finalizarDuelo(room, ganador, perdedor, motivo, resumen, 100);
   }
 
   handlePlayerFinish(socket, data) {
@@ -174,11 +187,8 @@ export class RoomManager {
   /**
    * Resuelve la caída de un jugador en un juego de supervivencia.
    *
-   * Regla del juego: **gana quien NO cae al abismo**. El caso delicado es que
-   * los dos caigan casi a la vez: antes el duelo se cerraba con el primer aviso,
-   * el segundo se descartaba (el jugador se quedaba sin resultado) y el ganador
-   * salía por azar. Ahora se escucha también al rival y, si cae dentro de la
-   * ventana, gana **quien aguantó más tiempo**.
+   * Gana quien NO cae. Si los dos caen casi a la vez se escucha al rival dentro
+   * de una ventana corta: gana quien aguantó más, o empate si fue idéntico.
    *
    * @param {object} room Sala del duelo.
    * @param {any} socket Socket del jugador que acaba de caer.
@@ -231,15 +241,15 @@ export class RoomManager {
 
   /**
    * Cierra el duelo dando la victoria al rival del socket indicado.
-   * Se usa cuando un jugador se rinde, comete una infracción grave o cae al
-   * abismo sin que el rival caiga también.
+   * Se usa cuando un jugador se rinde, comete una infracción grave o cae sin que
+   * el rival caiga también.
    *
    * @param {any} socket Socket del jugador que abandona.
-   * @param {string} motivo Código que se guarda en el historial.
+   * @param {string} motivo Código para el historial.
    * @param {(username: string) => string} textoResumen Texto explicativo.
    * @param {number} puntosGanador Puntos de temporada para el ganador.
    * @param {number} [cortesiaMs] Espera antes de cerrar, para dar tiempo a que
-   *   llegue el aviso del rival (ver la ventana de cortesía más abajo).
+   *   llegue el aviso del rival (la ventana de cortesía).
    */
   _cerrarDandoVictoriaAlRival(socket, motivo, textoResumen, puntosGanador, cortesiaMs = 0) {
     const roomId = this.socketToRoom.get(socket);
@@ -284,8 +294,7 @@ export class RoomManager {
         socketToRoom: this.socketToRoom,
         reconnectManager: this.reconnectManager,
         send: this._send.bind(this),
-        finishMatch: (room, winner, loser, reason, summary, wp, lp) =>
-          this._finishMatch(room, winner, loser, reason, summary, wp, lp),
+        finishMatch: (room, w, l, reason, summary, wp, lp) => this._finalizarDuelo(room, w, l, reason, summary, wp),
       },
       socket
     );
@@ -306,11 +315,6 @@ export class RoomManager {
     cerrarEnEmpate(this._ctxCierre(), room, resumen);
   }
 
-  /** Cierra con un ganador sin limpiar el reloj. La lógica vive en match-end.js. */
-  _finishMatch(room, ganador, perdedor, motivo, resumen, puntosGanador) {
-    if (room.ghostSimulation) room.ghostSimulation.stop();
-    cerrarConGanador(this._ctxCierre(), room, ganador, perdedor, motivo, resumen, puntosGanador);
-  }
 
   _cleanupRoom(roomId, delayMs) {
     setTimeout(() => {

@@ -14,6 +14,7 @@
  * Se extrajo de rooms.js para respetar el límite de 350 líneas.
  * ==============================================================================
  */
+import { detenerVigilancia } from './stall-watch.js';
 
 /** Puntos de temporada que recibe CADA jugador en un empate. */
 export const PUNTOS_EMPATE = 50;
@@ -48,6 +49,7 @@ function cerrarSala(room, limpiar) {
     clearTimeout(room.matchClock);
     room.matchClock = null;
   }
+  detenerVigilancia(room);
   if (room.ghostSimulation) room.ghostSimulation.stop();
   limpiar(room.roomId, 6000);
 }

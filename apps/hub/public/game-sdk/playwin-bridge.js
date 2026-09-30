@@ -76,19 +76,29 @@
 
       if (p.token) {
         // ------------------------------------------------------------------
-        // UN TOKEN NUEVO SIEMPRE MANDA
+        // SÓLO SE RECONECTA SI EL TOKEN ES NUEVO
         //
-        // Antes esto era `if (!isSocketOpen()) connectWebSocket()`: si ya había
-        // un socket abierto NO se reconectaba. Pero ese socket podía haberse
-        // abierto con la sesión guardada en localStorage, cuyo token dura 5
-        // minutos. Al caducar, el servidor lo rechaza (SECURITY_ERROR) y el
-        // jugador veía «Token de partida no válido o expirado»… mientras el Hub
-        // le acababa de entregar un token BUENO que nunca llegaba a usarse.
+        // Hay que evitar dos fallos opuestos a la vez:
         //
-        // Reconectar es siempre correcto aquí: se descarta el socket viejo y se
-        // abre uno nuevo con el token recién recibido.
+        //  · Antes era `if (!isSocketOpen()) connectWebSocket()`: con un socket
+        //    abierto NO reconectaba, así que un token recién entregado se
+        //    ignoraba y el jugador se quedaba en «Token no válido o expirado»
+        //    con un token bueno en la mano.
+        //
+        //  · Reconectar SIEMPRE también estaba mal: el Hub envía PLAYWIN_INIT dos
+        //    veces (al cargar el iframe y cuando el SDK avisa PLAYWIN_READY) con
+        //    el MISMO token. La segunda entrega destruía el socket vivo y se
+        //    perdía la partida que estuviera en curso.
+        //
+        // La condición correcta es comparar el token: si es el mismo y la
+        // conexión sigue abierta, no hay nada que hacer.
         // ------------------------------------------------------------------
-        retryConnection();
+        const yaConectadoConEseToken = connection && connection.isOpen() && tokenEnviado === p.token;
+        if (yaConectadoConEseToken) {
+          console.log('[PlayWin SDK] El token recibido ya está activo: no se reconecta.');
+        } else {
+          retryConnection();
+        }
       } else {
         showScreen('pw-screen-auth');
       }
@@ -136,6 +146,16 @@
     isOffline = false;
   }
 
+  // Token con el que se abrió la conexión actual. Sirve para no reconectar
+  // cuando el Hub reenvía el MISMO token (lo hace dos veces al arrancar), y para
+  // sí reconectar cuando entrega uno distinto (p. ej. tras caducar el anterior).
+  let tokenEnviado = null;
+
+  /** Registra el token que viaja en cada JOIN_MATCH. */
+  function marcarTokenEnviado(token) {
+    tokenEnviado = token || null;
+  }
+
   function injectInterface() {
     if (document.getElementById('playwin-ui-layer')) return;
     // El markup y la inyección del DOM viven en playwin-bridge-ui.js para que
@@ -175,7 +195,6 @@
   }
 
   // ¿Hay conexión abierta con el servidor de duelos?
-  // ¿Hay conexión abierta con el servidor de duelos?
   function isSocketOpen() { return !!connection && connection.isOpen(); }
 
   // Envía un mensaje si la conexión está abierta.
@@ -206,7 +225,13 @@
     if (!connection) {
       connection = window.PLAYWIN_CONNECTION.createConnectionManager({
         wsUrl: () => WS_URL,
-        joinPayload: () => ({ action: 'JOIN_MATCH', player: { ...currentPlayer, gameId: currentGameId } }),
+        // Al construir el JOIN_MATCH se anota el token que viaja: así se puede
+        // comparar con el que entregue el Hub la próxima vez y decidir si hace
+        // falta reconectar.
+        joinPayload: () => {
+          marcarTokenEnviado(currentPlayer.token);
+          return { action: 'JOIN_MATCH', player: { ...currentPlayer, gameId: currentGameId } };
+        },
         isMatchLive: () => isMatchLive,
         onOffline: (motivo) => { isOffline = true; showOfflineScreen(motivo); },
         onOnline: (recuperado) => { isOffline = false; if (recuperado) clearOffline(); startPing(); },

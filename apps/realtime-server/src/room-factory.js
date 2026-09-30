@@ -29,6 +29,23 @@ async function resolvePlayerTier(userId, gameId) {
 }
 
 /**
+ * Quita el token de partida antes de enviar datos de un jugador al cliente.
+ *
+ * El MatchTicket es una credencial: con él se puede abrir una conexión al
+ * servidor de duelos haciéndose pasar por ese jugador. Enviar el del RIVAL no
+ * tiene ninguna utilidad —el juego sólo necesita su alias, avatar y división— y
+ * lo exponía a cualquiera que mirase el tráfico del WebSocket.
+ *
+ * @param {object} jugador Datos del jugador.
+ * @returns {object} Copia sin el token.
+ */
+function sinToken(jugador) {
+  if (!jugador) return jugador;
+  const { token, ...resto } = jugador;
+  return resto;
+}
+
+/**
  * PLAY WIN REALTIME — CREADOR DE SALAS (room-factory.js)
  * Modularizado para cumplir el límite < 350 líneas de playwin-code-governance.
  */
@@ -58,8 +75,8 @@ export async function createDuelRoom(gameId, entryA, entryB, sendFn, broadcastFn
     startedAt: now,
   };
 
-  sendFn(entryA.socket, { event: 'MATCH_START', roomId, seed, role: 'PLAYER_A', player: entryA.player, opponent: entryB.player });
-  sendFn(entryB.socket, { event: 'MATCH_START', roomId, seed, role: 'PLAYER_B', player: entryB.player, opponent: entryA.player });
+  sendFn(entryA.socket, { event: 'MATCH_START', roomId, seed, role: 'PLAYER_A', player: sinToken(entryA.player), opponent: sinToken(entryB.player) });
+  sendFn(entryB.socket, { event: 'MATCH_START', roomId, seed, role: 'PLAYER_B', player: sinToken(entryB.player), opponent: sinToken(entryA.player) });
 
   setTimeout(() => {
     if (room.status === 'COUNTDOWN') {
@@ -104,8 +121,8 @@ export async function createGhostRoom(gameId, entry, callbacks, sendFn) {
     roomId,
     seed,
     role: 'PLAYER_A',
-    player: entry.player,
-    opponent: { ...rival, isBot: true },
+    player: sinToken(entry.player),
+    opponent: { ...sinToken(rival), isBot: true },
   });
   return { room, roomId };
 }

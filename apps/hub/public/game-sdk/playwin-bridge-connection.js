@@ -45,16 +45,27 @@
     // cuando el socket todavía no existe.
     var messageHandler = null;
 
-    /** Cierra y olvida el socket actual, cancelando sus relojes. */
+    /**
+     * Cierra y olvida el socket actual, cancelando sus relojes.
+     *
+     * ⚠️ Los manejadores NO se anulan a `null`, se sustituyen por funciones
+     * vacías. La diferencia importa: si se dejan a `null` y el socket todavía
+     * estaba CONECTANDO, al cerrarlo el navegador emite un `error` de forma
+     * ASÍNCRONA. Un `error` sin oyente **sube sin capturar y rompe el juego**
+     * («WebSocket is closed before the connection is established»). Con un
+     * manejador mudo, ese aviso se absorbe en lugar de tumbar la partida.
+     *
+     * Tampoco vale limitarse a `try/catch` alrededor de `close()`: el error no
+     * se lanza ahí, llega después como evento.
+     */
     function descartarSocket() {
       if (connectTimer) { clearTimeout(connectTimer); connectTimer = null; }
       if (socket) {
-        // Se quitan los manejadores ANTES de cerrar: si no, el cierre dispararía
-        // la lógica de reconexión y abriríamos un socket que no queremos.
-        socket.onopen = null;
-        socket.onclose = null;
-        socket.onerror = null;
-        socket.onmessage = null;
+        const mudos = () => {};
+        socket.onopen = mudos;
+        socket.onclose = mudos;   // evita que el cierre dispare una reconexión
+        socket.onerror = mudos;   // absorbe el error del cierre en curso
+        socket.onmessage = mudos;
         try { socket.close(); } catch (_) { /* ya estaba cerrado */ }
       }
       socket = null;

@@ -149,7 +149,68 @@ if (socketNuevo && seReconecto) {
   comprobar('el socket nuevo lleva el token BUENO', enviado === 'TOKEN_NUEVO_VALIDO', String(enviado));
 }
 
-console.log(`\n${fallos === 0 ? '🎉 EL TOKEN NUEVO SIEMPRE SE USA' : `❌ ${fallos} comprobación(es) fallaron`}\n`);
+// ── 5. El Hub reenvía el MISMO token: NO debe reconectar ────────────────────
+//
+// El Hub envía PLAYWIN_INIT dos veces al arrancar (al cargar el iframe y cuando
+// el SDK avisa PLAYWIN_READY) con el mismo token. Reconectar en la segunda
+// destruía el socket vivo y se perdía la partida en curso.
+console.log('\n  Segundo aviso del Hub con el MISMO token:');
+const socketsTrasSegundo = sockets.length;
+const socketActivo = sockets[sockets.length - 1];
+
+delHub({
+  type: 'PLAYWIN_INIT',
+  payload: {
+    token: 'TOKEN_NUEVO_VALIDO',
+    playerId: 'nuevo',
+    username: 'jugador',
+    avatar: '🧪',
+    wsUrl: 'ws://localhost:3001/ws',
+  },
+});
+
+await new Promise((r) => setTimeout(r, 300));
+
+comprobar(
+  'NO se abre otro socket cuando el token es el mismo',
+  sockets.length === socketsTrasSegundo,
+  `sockets: ${socketsTrasSegundo} -> ${sockets.length}`
+);
+comprobar(
+  'el socket en curso sigue ABIERTO',
+  socketActivo && socketActivo.readyState === WebSocketFalso.OPEN,
+  socketActivo ? `estado ${socketActivo.readyState}` : 'no hay'
+);
+
+// ── 6. Y si el token SÍ cambia estando conectado, reconecta ─────────────────
+console.log('\n  Tercer aviso con un token DISTINTO (p. ej. caducó el anterior):');
+const socketsAntesDeTercero = sockets.length;
+
+delHub({
+  type: 'PLAYWIN_INIT',
+  payload: {
+    token: 'TOKEN_RENOVADO',
+    playerId: 'nuevo',
+    username: 'jugador',
+    avatar: '🧪',
+    wsUrl: 'ws://localhost:3001/ws',
+  },
+});
+
+await new Promise((r) => setTimeout(r, 300));
+
+comprobar(
+  'con un token distinto SÍ se reconecta',
+  sockets.length > socketsAntesDeTercero,
+  `sockets: ${socketsAntesDeTercero} -> ${sockets.length}`
+);
+const socketFinal = sockets[sockets.length - 1];
+if (socketFinal && sockets.length > socketsAntesDeTercero) {
+  socketFinal.abrir();
+  comprobar('el socket final lleva el token renovado', socketFinal.enviados[0]?.player?.token === 'TOKEN_RENOVADO', String(socketFinal.enviados[0]?.player?.token));
+}
+
+console.log(`\n${fallos === 0 ? '🎉 EL TOKEN SE GESTIONA CORRECTAMENTE EN LOS DOS SENTIDOS' : `❌ ${fallos} comprobación(es) fallaron`}\n`);
 
 // El SDK deja temporizadores vivos (ping, lerp), así que el proceso no termina
 // solo. Se marca el código y se sale explícitamente para no dejar el test colgado.
