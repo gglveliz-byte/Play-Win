@@ -137,9 +137,9 @@ node scratch/verify_bugs_api.mjs http://localhost:3000
 | 🟠 **Alto** | **0 abiertos** | ~~BUG-003~~ ✅ · ~~BUG-004~~ ✅ · ~~BUG-006~~ ✅ · ~~BUG-007~~ ✅ · ~~BUG-019~~ ✅ · ~~BUG-020~~ ✅ · ~~BUG-022~~ ✅ |
 | 🟡 **Medio** | **2 abiertos** (BUG-028 · BUG-033) | ~~BUG-038~~ ✅ | ~~BUG-008~~ ✅ · ~~BUG-009~~ ✅ · ~~BUG-010~~ ✅ · ~~BUG-011~~ ✅ · ~~BUG-012~~ ✅ · ~~BUG-013~~ ✅ · ~~BUG-016~~ ✅ · ~~BUG-023~~ ✅ · ~~BUG-024~~ ✅ · ~~BUG-027~~ ✅ · ~~BUG-028~~ ✅ · **BUG-033** ❌ |
 | ⚪ **Bajo** | **0 abiertos** | ~~BUG-014~~ ✅ · ~~BUG-015~~ ✅ |
-| ✅ **Resueltos** | **44 de 46** | Todos menos BUG-028 y BUG-033 |
+| ✅ **Resueltos** | **49 de 51** | Todos menos BUG-028 y BUG-033 |
 
-> **Aritmética:** **46 bugs catalogados = 44 resueltos · 2 abiertos · 0 parciales.**
+> **Aritmética:** **51 bugs catalogados = 49 resueltos · 2 abiertos · 0 parciales.**
 > Comprobación automática: `node scratch/check_bug_consistency.mjs`
 >
 > **Los abiertos (BUG-028 y BUG-033) no son fallos de funcionamiento: son capas de UI**
@@ -210,6 +210,150 @@ servidor no reinicia nada: sería un botón muerto).
 **Verificación:** `check-game-dom.mjs space` → ✅ 32/32 sin ausencias · protocolo real del
 juego completo (`MATCH_WAITING → MATCH_START → MATCH_LIVE → RIVAL_TICK`) · el SDK entrega
 `onMatchReady → onMatchLive`.
+
+---
+
+### 🔴 BUG-048 · Los dos motores congelados dejaban la partida SIN RESULTADO
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (es el «murió el sistema» que reportó el usuario) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/realtime-server/src/stall-watch.js` (nuevo) · `rooms.js` |
+
+**Síntoma reportado:** *"murió el sistema"* — los dos marcadores congelados, nadie puede moverse y **nunca llega un resultado**.
+
+**Cómo se encontró:** análisis de inicio a fin con dos clientes reales contra el servidor. El escenario 1 (partida normal) salió perfecto; el escenario 2 (los dos clientes dejan de enviar ticks) reveló el agujero:
+
+```
+[17319ms] C y D -> DEJAN de enviar ticks
+… 25 segundos después …
+❌ C recibió MATCH_END · SIN RESULTADO
+❌ D recibió MATCH_END · SIN RESULTADO
+```
+
+**Causa raíz:** el servidor no tenía forma de detectar que ya no había partida. Si los dos clientes callan a la vez (motor congelado, pestaña suspendida, wifi caído en ambos), no llega **ninguna** señal: ni caída, ni rendición, ni desconexión. El único tope era `MATCH_TIME_LIMIT_MS = 180000`, es decir **tres minutos** de espera para el jugador.
+
+**Arreglo:** nuevo `stall-watch.js`. Si **ninguno** de los dos envía telemetría en **8 segundos**, la partida se cierra con motivo `ABANDONED` y gana quien más aguantó.
+
+> ⚠️ **Distinción importante:** si sólo **uno** calla, **no se cierra nada**. Ese caso ya lo cubre la ventana de reconexión de 15 s, y cerrar ahí castigaría a quien sí está jugando.
+
+**Verificado:**
+
+```
+[17319ms] C y D -> DEJAN de enviar ticks
+[25409ms] C <- MATCH_END motivo=ABANDONED ganador=cccc…
+[25410ms] D <- MATCH_END motivo=ABANDONED
+✅ los dos ven el MISMO resultado · 🎉 FLUJO CORRECTO
+```
+
+---
+
+### 🔴 BUG-049 · El cierre del WebSocket tumbaba el SDK y mataba el juego
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Crítico** (excepción sin capturar) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `packages/game-sdk/playwin-bridge-connection.js` · `descartarSocket()` |
+
+**Síntoma:** el proceso moría con
+
+```
+Error: WebSocket was closed before the connection was established
+    at descartarSocket (playwin-bridge-connection.js:58)
+Node.js v24.14.1        ← EL PROCESO MURIÓ
+```
+
+**Causa raíz:** al descartar un socket que **todavía estaba CONECTANDO**, el navegador emite un `error` de forma **ASÍNCRONA**. El código anulaba los manejadores a `null` antes de cerrar, así que ese `error` llegaba **sin ningún oyente** — y un `error` sin oyente en un `EventEmitter` **sube sin capturar**. En el navegador eso rompe la ejecución del juego.
+
+**Arreglo:** los manejadores no se anulan, se sustituyen por **funciones mudas**. La diferencia es la clave: un `try/catch` alrededor de `close()` **no sirve**, porque el error no se lanza ahí — llega después, como evento.
+
+```javascript
+const mudos = () => {};
+socket.onopen = mudos;
+socket.onclose = mudos;   // evita que el cierre dispare una reconexión
+socket.onerror = mudos;   // absorbe el error del cierre en curso
+socket.onmessage = mudos;
+```
+
+---
+
+### 🔴 BUG-050 · Reconectar siempre destruía la partida en curso
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Alto** (fallo introducido al arreglar el token) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `packages/game-sdk/playwin-bridge.js` · `PLAYWIN_INIT` |
+
+**Síntoma:** en la consola del usuario:
+
+```
+WebSocket connection to 'ws://localhost:3001/ws' failed:
+  WebSocket is closed before the connection is established.
+  descartarSocket
+```
+
+**Causa raíz:** al arreglar el token caducado se pasó a reconectar en **cada** `PLAYWIN_INIT`. Pero el Hub lo envía **dos veces** al arrancar:
+
+```javascript
+onLoad={() => sendInitToIframe(t)}                       // al cargar el iframe
+if (e.data?.type === 'PLAYWIN_READY') sendInitToIframe(t) // cuando el SDK avisa
+```
+
+Los dos con el **mismo** token. La segunda entrega **destruía el socket vivo** — justo el que estaba en cola o en partida.
+
+**Arreglo:** la condición correcta no es «¿hay socket?» sino **«¿el token cambió?»**. Se compara con el token que viajó en el último `JOIN_MATCH`: si es el mismo y la conexión sigue abierta, **no se toca nada**.
+
+| Caso | Antes | Ahora |
+| :--- | :--- | :--- |
+| Socket abierto con token **caducado** | ❌ no reconectaba | ✅ reconecta con el bueno |
+| Socket abierto con el **mismo** token | ❌ reconectaba y lo rompía | ✅ no toca nada |
+| Socket abierto con token **distinto** | ❌ no reconectaba | ✅ reconecta |
+
+---
+
+### 🔴 BUG-051 · Empate por puntuación: decía «Empate a N» y elegía ganador
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🔴 **Alto** (mismo fallo que BUG-046, en otra vía de cierre) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/realtime-server/src/rooms.js` · `_resolveScoreWinner` |
+
+**Causa raíz:**
+
+```javascript
+const winner = p1 >= p2 ? room.playerA : room.playerB;   // ← NO estricto
+const resumen = p1 === p2 ? `Empate a ${p1}.` : …          // ← decía EMPATE
+```
+
+Con puntuaciones **iguales**, `p1 >= p2` es cierto y elegía a `playerA` **por posición**, mientras el resumen anunciaba un empate. Uno cobraba los **100 puntos de victoria** y el otro **20**. Es exactamente el BUG-046, pero seguía vivo en las vías de **tiempo agotado** y **abandono**.
+
+**Arreglo:** comparación **estricta** (`p1 > p2`) y rama de empate que cierra **sin ganador**.
+
+**Verificado:** `test:empate-puntos` comprueba el empate en **todas** las vías de cierre, incluido que el SDK sepa mostrarlo y que la comparación no estricta ya no exista.
+
+---
+
+### 🔒 BUG-052 · El servidor enviaba el token del RIVAL al cliente
+
+| Campo | Valor |
+| :--- | :--- |
+| **Severidad** | 🟠 **Medio** (exposición de credencial innecesaria) |
+| **Estado** | ✅ **RESUELTO** el 2026-09-29 |
+| **Ubicación** | `apps/realtime-server/src/room-factory.js` · `sinToken()` |
+
+**Cómo se encontró:** al revisar el log del flujo completo apareció el token del rival en claro:
+
+```
+MATCH_START { …, opponent: { username: 'rival_flujo', token: 'eyJhbGciOi…' } }
+```
+
+**Por qué importa:** el `MatchTicket` es una **credencial**: con él se puede abrir una conexión al servidor de duelos haciéndose pasar por ese jugador. El juego **no la necesita** — sólo usa alias, avatar y división — y quedaba expuesta a cualquiera que mirase el tráfico del WebSocket.
+
+**Arreglo:** nuevo `sinToken()` que quita la credencial antes de enviar los datos de un jugador. Se aplicó a las dos vías (`MATCH_START` de duelo y de partida contra bot). **`MATCH_RESUME` ya estaba limpio.**
 
 ---
 

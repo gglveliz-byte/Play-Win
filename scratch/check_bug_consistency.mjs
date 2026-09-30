@@ -11,7 +11,7 @@ const parciales = [];
 const resueltos = [];
 const faltantes = [];
 
-for (let n = 1; n <= 60; n++) {
+for (let n = 1; n <= 70; n++) {
   const id = `BUG-${String(n).padStart(3, '0')}`;
   // Los encabezados varían en nivel (### o ####) y pueden llevar un emoji de
   // severidad delante, así que se busca el id como encabezado, no el prefijo.
